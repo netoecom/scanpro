@@ -63,7 +63,7 @@ export default function ScannerScreen() {
           />
           <AppButton
             title="Voltar"
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
             variant="tertiary"
             style={{ marginTop: spacing.small }}
           />
@@ -121,7 +121,7 @@ export default function ScannerScreen() {
           <View style={styles.topControls}>
             <TouchableOpacity
               style={styles.circleButton}
-              onPress={() => router.back()}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={24} color="#FFFFFF" />
