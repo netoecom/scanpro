@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import { ScannerStatus, DocumentDetection, ScanFilterMode } from '../../types';
 import { ProcessingPipeline, ProcessedPageResult } from '../../services/processing';
+import { OcrService } from '../../services/ocr/ocrService';
 
 export function useScannerEngine() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -53,15 +54,30 @@ export function useScannerEngine() {
     return () => clearTimeout(timer);
   }, [status]);
 
-  // Executa o processamento real da imagem através da esteira de processamento
+  // Executa o processamento real da imagem através da esteira de processamento e OCR
   const processCapturedImage = useCallback(
     async (imageUri: string, mode: ScanFilterMode = filterMode) => {
       setStatus('PROCESSING');
       try {
-        const result = await ProcessingPipeline.processPage({
-          imageUri,
-          filterMode: mode,
-        });
+        const [result, ocrResult] = await Promise.all([
+          ProcessingPipeline.processPage({
+            imageUri,
+            filterMode: mode,
+          }),
+          OcrService.recognizeText(imageUri).catch((err) => {
+            console.warn('Falha silenciosa do OCR:', err);
+            return {
+              text: '',
+              confidence: 0,
+              suggestedTitle: undefined,
+              detectedType: undefined,
+            };
+          }),
+        ]);
+
+        result.ocrText = ocrResult.text;
+        result.suggestedTitle = ocrResult.suggestedTitle;
+
         setProcessedResult(result);
         setStatus('CAPTURE_SUCCESS');
         triggerHaptic();

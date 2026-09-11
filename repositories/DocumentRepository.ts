@@ -1,9 +1,9 @@
-import { Document, DocumentPage, CreateDocumentInput, UpdateDocumentInput } from '../types';
+import { Document, DocumentPage, Folder, CreateDocumentInput, UpdateDocumentInput } from '../types';
 
 export interface DocumentRepository {
   createDocument(input: CreateDocumentInput): Promise<Document>;
   getDocument(id: string): Promise<Document | null>;
-  listDocuments(): Promise<Document[]>;
+  listDocuments(folderId?: string | null): Promise<Document[]>;
   updateDocument(id: string, input: UpdateDocumentInput): Promise<Document>;
   deleteDocument(id: string): Promise<void>;
   searchDocuments(query: string): Promise<Document[]>;
@@ -11,4 +11,7 @@ export interface DocumentRepository {
   addPage(documentId: string, page: Omit<DocumentPage, 'id' | 'documentId' | 'createdAt'>): Promise<DocumentPage>;
   deletePage(documentId: string, pageId: string): Promise<void>;
   reorderPages(documentId: string, pageIdsInOrder: string[]): Promise<DocumentPage[]>;
+  listFolders(): Promise<Folder[]>;
+  createFolder(name: string): Promise<Folder>;
+  deleteFolder(id: string): Promise<void>;
 }

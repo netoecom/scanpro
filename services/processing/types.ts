@@ -15,4 +15,7 @@ export interface ProcessedPageResult {
   width: number;
   height: number;
   filterMode: ScanFilterMode;
+  ocrText?: string;
+  suggestedTitle?: string;
 }
+

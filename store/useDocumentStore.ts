@@ -1,19 +1,30 @@
 import { create } from 'zustand';
-import { Document, DocumentPage } from '../types';
+import { Document, DocumentPage, Folder } from '../types';
 import { defaultDocumentRepository, DocumentRepository } from '../repositories';
 
 interface DocumentState {
   documents: Document[];
+  folders: Folder[];
   selectedDocument: Document | null;
   currentPages: DocumentPage[];
+  activeFolderId: string | null;
+  viewMode: 'list' | 'grid';
   isLoading: boolean;
   error: string | null;
   searchQuery: string;
 
   // Actions
   loadDocuments: () => Promise<void>;
+  loadFolders: () => Promise<void>;
+  createFolder: (name: string) => Promise<Folder>;
+  deleteFolder: (folderId: string) => Promise<void>;
+  setActiveFolderId: (folderId: string | null) => void;
+  setViewMode: (mode: 'list' | 'grid') => void;
   setSearchQuery: (query: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
+  renameDocument: (id: string, newTitle: string) => Promise<void>;
+  moveDocumentToFolder: (id: string, folderId: string | null) => Promise<void>;
+  updateDocumentPdf: (id: string, pdfPath: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   addDocument: (
     title: string,
@@ -23,7 +34,9 @@ interface DocumentState {
       thumbnailPath: string;
       width: number;
       height: number;
-    }>
+      ocrText?: string;
+    }>,
+    folderId?: string | null
   ) => Promise<Document>;
   loadDocumentPages: (documentId: string) => Promise<DocumentPage[]>;
   reorderDocumentPages: (documentId: string, pageIdsInOrder: string[]) => Promise<void>;
@@ -36,8 +49,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
 
   return {
     documents: [],
+    folders: [],
     selectedDocument: null,
     currentPages: [],
+    activeFolderId: null,
+    viewMode: 'list',
     isLoading: false,
     error: null,
     searchQuery: '',
@@ -45,10 +61,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
     loadDocuments: async () => {
       set({ isLoading: true, error: null });
       try {
-        const query = get().searchQuery;
-        const docs = query.trim()
-          ? await repository.searchDocuments(query)
-          : await repository.listDocuments();
+        const { searchQuery, activeFolderId } = get();
+        const docs = searchQuery.trim()
+          ? await repository.searchDocuments(searchQuery)
+          : await repository.listDocuments(activeFolderId);
         set({ documents: docs, isLoading: false });
       } catch (err) {
         set({
@@ -58,12 +74,53 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
       }
     },
 
+    loadFolders: async () => {
+      try {
+        const folders = await repository.listFolders();
+        set({ folders });
+      } catch (err) {
+        console.error('Falha ao carregar pastas:', err);
+      }
+    },
+
+    createFolder: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error('Nome da pasta não pode ser vazio');
+      const folder = await repository.createFolder(trimmed);
+      set((state) => ({ folders: [...state.folders, folder] }));
+      return folder;
+    },
+
+    deleteFolder: async (folderId: string) => {
+      try {
+        await repository.deleteFolder(folderId);
+        set((state) => ({
+          folders: state.folders.filter((f) => f.id !== folderId),
+          activeFolderId: state.activeFolderId === folderId ? null : state.activeFolderId,
+        }));
+        await get().loadDocuments();
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao excluir pasta',
+        });
+      }
+    },
+
+    setActiveFolderId: (folderId: string | null) => {
+      set({ activeFolderId: folderId });
+      get().loadDocuments();
+    },
+
+    setViewMode: (mode: 'list' | 'grid') => {
+      set({ viewMode: mode });
+    },
+
     setSearchQuery: async (query: string) => {
       set({ searchQuery: query, isLoading: true });
       try {
         const docs = query.trim()
           ? await repository.searchDocuments(query)
-          : await repository.listDocuments();
+          : await repository.listDocuments(get().activeFolderId);
         set({ documents: docs, isLoading: false });
       } catch (err) {
         set({
@@ -110,6 +167,36 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
       }
     },
 
+    moveDocumentToFolder: async (id: string, folderId: string | null) => {
+      try {
+        const updated = await repository.updateDocument(id, { folderId });
+        set((state) => ({
+          documents: state.documents.map((d) => (d.id === id ? updated : d)),
+          selectedDocument:
+            state.selectedDocument?.id === id ? updated : state.selectedDocument,
+        }));
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao mover documento',
+        });
+      }
+    },
+
+    updateDocumentPdf: async (id: string, pdfPath: string) => {
+      try {
+        const updated = await repository.updateDocument(id, { pdfPath });
+        set((state) => ({
+          documents: state.documents.map((d) => (d.id === id ? updated : d)),
+          selectedDocument:
+            state.selectedDocument?.id === id ? updated : state.selectedDocument,
+        }));
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao vincular PDF ao documento',
+        });
+      }
+    },
+
     deleteDocument: async (id: string) => {
       try {
         await repository.deleteDocument(id);
@@ -125,11 +212,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
       }
     },
 
-    addDocument: async (title, pages) => {
+    addDocument: async (title, pages, folderId = null) => {
       set({ isLoading: true, error: null });
       try {
         const created = await repository.createDocument({
           title,
+          folderId,
           pages: pages.map((p, idx) => ({
             ...p,
             pageIndex: idx,

@@ -72,7 +72,7 @@ export default function ScannerScreen() {
     );
   }
 
-  // Concluir e salvar o documento no repositório local
+  // Concluir e salvar o documento no repositório local com suporte a título sugerido por OCR
   const handleFinishScan = async () => {
     const allPages = [...capturedPages];
     if (processedResult) {
@@ -81,9 +81,12 @@ export default function ScannerScreen() {
 
     if (allPages.length > 0) {
       const now = new Date();
-      const title = `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      const detectedTitle = allPages.find((p) => p.suggestedTitle)?.suggestedTitle;
+      const title =
+        detectedTitle ||
+        `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-      await addDocument(
+      const newDoc = await addDocument(
         title,
         allPages.map((page) => ({
           originalPath: page.originalUri,
@@ -91,8 +94,13 @@ export default function ScannerScreen() {
           thumbnailPath: page.thumbnailUri,
           width: page.width,
           height: page.height,
+          ocrText: page.ocrText,
         }))
       );
+
+      // Redireciona diretamente para os detalhes do documento recém-criado para revisão/PDF
+      router.replace(`/document/${newDoc.id}` as any);
+      return;
     }
 
     router.replace('/');

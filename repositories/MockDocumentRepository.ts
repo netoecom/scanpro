@@ -1,5 +1,10 @@
-import { Document, DocumentPage, CreateDocumentInput, UpdateDocumentInput } from '../types';
+import { Document, DocumentPage, Folder, CreateDocumentInput, UpdateDocumentInput } from '../types';
 import { DocumentRepository } from './DocumentRepository';
+
+const INITIAL_FOLDERS: Folder[] = [
+  { id: 'folder-1', name: 'Trabalho & Contratos', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'folder-2', name: 'Pessoal & Finanças', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
 
 // Seed inicial para viabilizar desenvolvimento e testes visuais (Fases 0 e 1)
 const INITIAL_DOCUMENTS: Document[] = [
@@ -51,9 +56,11 @@ const INITIAL_PAGES: Record<string, DocumentPage[]> = {
 export class MockDocumentRepository implements DocumentRepository {
   private documents: Map<string, Document> = new Map();
   private pages: Map<string, DocumentPage[]> = new Map();
+  private folders: Map<string, Folder> = new Map();
 
   constructor(seed = true) {
     if (seed) {
+      INITIAL_FOLDERS.forEach((folder) => this.folders.set(folder.id, { ...folder }));
       INITIAL_DOCUMENTS.forEach((doc) => this.documents.set(doc.id, { ...doc }));
       Object.entries(INITIAL_PAGES).forEach(([docId, docPages]) => {
         this.pages.set(docId, [...docPages]);
@@ -99,8 +106,12 @@ export class MockDocumentRepository implements DocumentRepository {
     return doc ? { ...doc } : null;
   }
 
-  async listDocuments(): Promise<Document[]> {
-    return Array.from(this.documents.values()).sort(
+  async listDocuments(folderId?: string | null): Promise<Document[]> {
+    let docs = Array.from(this.documents.values());
+    if (folderId !== undefined && folderId !== null) {
+      docs = docs.filter((d) => d.folderId === folderId);
+    }
+    return docs.sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }
@@ -130,9 +141,14 @@ export class MockDocumentRepository implements DocumentRepository {
     const q = query.toLowerCase().trim();
     if (!q) return this.listDocuments();
 
-    return Array.from(this.documents.values()).filter((doc) =>
-      doc.title.toLowerCase().includes(q)
-    );
+    return Array.from(this.documents.values()).filter((doc) => {
+      // 1. Busca no título do documento
+      if (doc.title.toLowerCase().includes(q)) return true;
+
+      // 2. Busca no texto OCR das páginas (Fase 7)
+      const docPages = this.pages.get(doc.id) ?? [];
+      return docPages.some((page) => page.ocrText && page.ocrText.toLowerCase().includes(q));
+    });
   }
 
   async getDocumentPages(documentId: string): Promise<DocumentPage[]> {
@@ -204,5 +220,26 @@ export class MockDocumentRepository implements DocumentRepository {
     }
 
     return reordered;
+  }
+
+  async listFolders(): Promise<Folder[]> {
+    return Array.from(this.folders.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createFolder(name: string): Promise<Folder> {
+    const id = `folder-${Date.now()}`;
+    const now = new Date().toISOString();
+    const folder: Folder = { id, name: name.trim(), createdAt: now, updatedAt: now };
+    this.folders.set(id, folder);
+    return folder;
+  }
+
+  async deleteFolder(id: string): Promise<void> {
+    this.folders.delete(id);
+    for (const doc of this.documents.values()) {
+      if (doc.folderId === id) {
+        doc.folderId = null;
+      }
+    }
   }
 }

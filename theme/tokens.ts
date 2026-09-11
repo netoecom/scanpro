@@ -122,4 +122,10 @@ export const shadows = {
       elevation: 6,
     },
   }),
+  get subtle() {
+    return this.card;
+  },
+  get elevated() {
+    return this.floating;
+  },
 } as const;
