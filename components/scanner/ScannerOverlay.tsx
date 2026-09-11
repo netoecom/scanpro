@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { ScannerStatus } from '../../types';
 import { colors, spacing, radii, typography } from '../../theme';
 
@@ -9,32 +9,42 @@ interface ScannerOverlayProps {
   autoCapture?: boolean;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const FRAME_WIDTH = Math.min(SCREEN_WIDTH * 0.85, 340);
-const FRAME_HEIGHT = FRAME_WIDTH * 1.414; // Proporção padrão A4
-
 export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
   status,
   confidence = 0,
-  autoCapture = true,
+  autoCapture = false,
 }) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // Área útil vertical entre controles superiores (~90px) e inferiores (~160px)
+  const availableVertical = Math.max(340, screenHeight - 250);
+  const maxAllowedWidth = Math.min(screenWidth * 0.90, 480);
+
+  // Proporção clássica de folha A4 (1 : 1.414)
+  let frameHeight = availableVertical * 0.90;
+  let frameWidth = frameHeight / 1.414;
+
+  if (frameWidth > maxAllowedWidth) {
+    frameWidth = maxAllowedWidth;
+    frameHeight = frameWidth * 1.414;
+  }
+
   const isDetected = status === 'DOCUMENT_DETECTED' || confidence > 0.6;
-  const isCapturing = status === 'CAPTURING' || status === 'PROCESSING';
 
   const getStatusMessage = () => {
     switch (status) {
       case 'SCANNER_SEARCHING':
-        return 'Aponte a câmera para o documento';
+        return 'Alinhe o documento no quadrante';
       case 'DOCUMENT_DETECTED':
-        return autoCapture ? 'Documento detectado! Mantenha estável...' : 'Documento detectado';
+        return autoCapture ? 'Documento detectado! Mantenha estável...' : 'Documento enquadrado. Pressione o botão para capturar';
       case 'CAPTURING':
-        return 'Capturando...';
+        return 'Capturando foto...';
       case 'PROCESSING':
-        return 'Processando recorte e nitidez...';
+        return 'Otimizando nitidez e contraste...';
       case 'CAPTURE_ERROR':
-        return 'Não consegui identificar o documento';
+        return 'Não foi possível identificar. Tente novamente';
       default:
-        return 'Aponte a câmera para o documento';
+        return 'Alinhe o documento no quadrante';
     }
   };
 
@@ -45,47 +55,55 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
       {/* Flash branco instantâneo na captura */}
       {status === 'CAPTURING' && <View style={styles.shutterFlash} />}
 
-      {/* Área Central de Enquadramento */}
+      {/* Pílula de Instrução Superior (abaixo dos controles de topo) */}
+      <View style={styles.topInstructionContainer}>
+        <View style={[styles.instructionPill, isDetected && styles.instructionPillDetected]}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: isDetected ? colors.success : '#FFFFFF' },
+            ]}
+          />
+          <Text style={styles.instructionText}>{getStatusMessage()}</Text>
+        </View>
+      </View>
+
+      {/* Quadrante Amplo de Enquadramento */}
       <View style={styles.centerContainer}>
         <View
           style={[
             styles.documentFrame,
-            { width: FRAME_WIDTH, height: FRAME_HEIGHT },
+            { width: Math.round(frameWidth), height: Math.round(frameHeight) },
             isDetected && styles.documentFrameDetected,
           ]}
         >
-          {/* Cantoneiras Visuais */}
+          {/* Cantoneiras Visuais Reforçadas */}
           <View style={[styles.corner, styles.cornerTL, { borderColor: cornerColor }]} />
           <View style={[styles.corner, styles.cornerTR, { borderColor: cornerColor }]} />
           <View style={[styles.corner, styles.cornerBL, { borderColor: cornerColor }]} />
           <View style={[styles.corner, styles.cornerBR, { borderColor: cornerColor }]} />
-        </View>
-
-        {/* Pílula de Instrução em Tempo Real */}
-        <View style={styles.pillContainer}>
-          <View style={[styles.instructionPill, isDetected && styles.instructionPillDetected]}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: isDetected ? colors.success : '#FFFFFF' },
-              ]}
-            />
-            <Text style={styles.instructionText}>{getStatusMessage()}</Text>
-          </View>
         </View>
       </View>
     </View>
   );
 };
 
-const CORNER_SIZE = 28;
-const CORNER_BORDER_WIDTH = 3.5;
+const CORNER_SIZE = 32;
+const CORNER_BORDER_WIDTH = 4;
 
 const styles = StyleSheet.create({
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topInstructionContainer: {
+    position: 'absolute',
+    top: 92,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
   },
   shutterFlash: {
     ...StyleSheet.absoluteFill,
@@ -95,13 +113,13 @@ const styles = StyleSheet.create({
   documentFrame: {
     position: 'relative',
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     borderRadius: radii.cards,
   },
   documentFrameDetected: {
-    borderColor: 'rgba(52, 199, 89, 0.45)',
-    backgroundColor: 'rgba(52, 199, 89, 0.05)',
+    borderColor: 'rgba(52, 199, 89, 0.65)',
+    backgroundColor: 'rgba(52, 199, 89, 0.06)',
   },
   corner: {
     position: 'absolute',
@@ -136,20 +154,19 @@ const styles = StyleSheet.create({
     borderRightWidth: CORNER_BORDER_WIDTH,
     borderBottomRightRadius: radii.cards,
   },
-  pillContainer: {
-    marginTop: spacing.section,
-    alignItems: 'center',
-  },
   instructionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingVertical: spacing.small,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    paddingVertical: spacing.small - 2,
     paddingHorizontal: spacing.default,
     borderRadius: radii.capsule,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   instructionPillDetected: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    borderColor: 'rgba(52, 199, 89, 0.3)',
   },
   statusDot: {
     width: 8,
@@ -160,6 +177,6 @@ const styles = StyleSheet.create({
   instructionText: {
     ...typography.subheadline,
     color: '#FFFFFF',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

@@ -1,7 +1,6 @@
 /**
  * ScanPro — WebCameraView
- * Implementação direta e infalível de câmera HTML5 para navegadores web e PWA.
- * Resolve incompatibilidades e telas pretas do expo-camera na Web.
+ * Implementação de câmera HTML5 para navegadores web e PWA com prioridade estrita à câmera traseira.
  */
 
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
@@ -29,6 +28,29 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
 
       let isMounted = true;
 
+      const getBackCameraDeviceId = async (): Promise<string | undefined> => {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+          if (videoDevices.length === 0) return undefined;
+
+          // 1. Procura câmera com label contendo palavras indicativas de câmera traseira
+          const labeledBack = videoDevices.find((d) =>
+            /back|rear|traseir|environment|extern/i.test(d.label)
+          );
+          if (labeledBack?.deviceId) return labeledBack.deviceId;
+
+          // 2. Em dispositivos móveis (Android/iOS), a câmera traseira costuma ser a última listada
+          if (videoDevices.length > 1) {
+            return videoDevices[videoDevices.length - 1].deviceId;
+          }
+
+          return videoDevices[0].deviceId;
+        } catch {
+          return undefined;
+        }
+      };
+
       const initCamera = async () => {
         // Encerra streams anteriores para trocar de lente
         if (streamRef.current) {
@@ -38,52 +60,91 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
           streamRef.current = null;
         }
 
-        const constraints: MediaStreamConstraints = {
-          audio: false,
-          video: {
-            facingMode: facing === 'back' ? { ideal: 'environment' } : 'user',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        };
+        let stream: MediaStream | null = null;
 
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-          if (!isMounted) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
+        // Tentativa 1: Busca específica com facingMode
+        if (facing === 'back') {
+          // Tenta identificar o deviceId traseiro caso permissão já esteja concedida
+          const backDeviceId = await getBackCameraDeviceId();
 
-          streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(() => {});
+          const backConstraintsList: MediaStreamConstraints[] = [
+            ...(backDeviceId
+              ? [
+                  {
+                    audio: false,
+                    video: {
+                      deviceId: { exact: backDeviceId },
+                      width: { ideal: 1920 },
+                      height: { ideal: 1440 },
+                    },
+                  },
+                ]
+              : []),
+            {
+              audio: false,
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1440 },
+              },
+            },
+            {
+              audio: false,
+              video: {
+                facingMode: 'environment',
+              },
+            },
+          ];
+
+          for (const c of backConstraintsList) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia(c);
+              if (stream) break;
+            } catch (e) {
+              // Continua para a próxima constraint
+            }
           }
-          onCameraReady?.();
-        } catch (err) {
-          console.warn('Tentativa com facingMode falhou, tentando fallback genérico:', err);
-          // Fallback para qualquer câmera disponível
+        } else {
+          // Modo frontal
           try {
-            const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: 'user',
+                width: { ideal: 1920 },
+                height: { ideal: 1440 },
+              },
+            });
+          } catch {
+            // Continua para o fallback genérico
+          }
+        }
+
+        // Fallback resiliente se nenhuma das opções anteriores funcionou
+        if (!stream) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
               audio: false,
               video: true,
             });
-            if (!isMounted) {
-              fallbackStream.getTracks().forEach((t) => t.stop());
-              return;
-            }
-
-            streamRef.current = fallbackStream;
-            if (videoRef.current) {
-              videoRef.current.srcObject = fallbackStream;
-              videoRef.current.play().catch(() => {});
-            }
-            onCameraReady?.();
-          } catch (finalError) {
-            console.error('Falha geral ao acessar câmera:', finalError);
-            onMountError?.(finalError);
+          } catch (finalErr) {
+            console.error('Falha geral ao acessar câmera:', finalErr);
+            if (isMounted) onMountError?.(finalErr);
+            return;
           }
         }
+
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+        onCameraReady?.();
       };
 
       initCamera();
@@ -106,8 +167,8 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
         }
 
         const video = videoRef.current;
-        const width = video.videoWidth || 1280;
-        const height = video.videoHeight || 720;
+        const width = video.videoWidth || 1920;
+        const height = video.videoHeight || 1440;
 
         const canvas = document.createElement('canvas');
         canvas.width = width;

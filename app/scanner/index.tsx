@@ -48,6 +48,7 @@ export default function ScannerScreen() {
     toggleAutoCapture,
     handleCameraReady,
     handleMountError,
+    retakeCurrentPage,
     resetScanner,
   } = useScannerEngine();
 
@@ -239,6 +240,15 @@ export default function ScannerScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContent}>
+            {/* Botão de Fechar / Voltar para a Captura */}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={retakeCurrentPage}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+
             {/* Header com indicador de sucesso */}
             <View style={styles.successBadge}>
               <Ionicons name="checkmark-circle" size={28} color={colors.success} />
@@ -356,15 +366,24 @@ export default function ScannerScreen() {
               </View>
             </View>
 
-            {/* Ações de Conclusão ou Continuação */}
+            {/* Ações de Conclusão, Adicionar Páginas ou Refazer */}
             <View style={styles.modalActions}>
-              <AppButton
-                title="Adicionar Mais Páginas"
-                variant="secondary"
-                onPress={addCurrentPageToDocument}
-                style={styles.modalButton}
-                icon={<Ionicons name="add" size={20} color={colors.primary} />}
-              />
+              <View style={styles.modalActionsRow}>
+                <AppButton
+                  title="Refazer Foto"
+                  variant="tertiary"
+                  onPress={retakeCurrentPage}
+                  style={{ flex: 1 }}
+                  icon={<Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />}
+                />
+                <AppButton
+                  title="Mais Páginas"
+                  variant="secondary"
+                  onPress={addCurrentPageToDocument}
+                  style={{ flex: 1 }}
+                  icon={<Ionicons name="add" size={18} color={colors.primary} />}
+                />
+              </View>
 
               <AppButton
                 title="Concluir e Salvar Documento"
@@ -620,6 +639,23 @@ const styles = StyleSheet.create({
   modalActions: {
     width: '100%',
     gap: spacing.compact,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.small,
+    width: '100%',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: spacing.default,
+    right: spacing.default,
+    zIndex: 10,
+    width: touchTarget.minSize,
+    height: touchTarget.minSize,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F0F2',
+    borderRadius: touchTarget.minSize / 2,
   },
   modalButton: {
     width: '100%',

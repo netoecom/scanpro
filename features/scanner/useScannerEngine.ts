@@ -15,7 +15,7 @@ export function useScannerEngine() {
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [autoCapture, setAutoCapture] = useState<boolean>(true);
+  const [autoCapture, setAutoCapture] = useState<boolean>(false);
   const [filterMode, setFilterMode] = useState<ScanFilterMode>('auto');
   const [confidence, setConfidence] = useState<number>(0.85);
 
@@ -57,15 +57,7 @@ export function useScannerEngine() {
 
   const handleMountError = useCallback((error: any) => {
     console.warn('Erro ao inicializar câmera:', error);
-    // Se falhou ao tentar usar câmera traseira (comum em desktop/web), tenta frontal
-    setFacing((prev) => {
-      if (prev === 'back') {
-        setCameraError('Câmera traseira indisponível. Tentando câmera frontal...');
-        return 'front';
-      }
-      setCameraError('Câmera indisponível ou permissão bloqueada pelo navegador.');
-      return prev;
-    });
+    setCameraError('Câmera indisponível ou permissão bloqueada no navegador.');
   }, []);
 
   // Simulação inteligente de detecção contínua de documento com cooldown
@@ -232,6 +224,12 @@ export function useScannerEngine() {
     setAutoCapture((prev) => !prev);
   }, []);
 
+  const retakeCurrentPage = useCallback(() => {
+    setStatus('SCANNER_SEARCHING');
+    setRawCapturedUri(null);
+    setProcessedResult(null);
+  }, []);
+
   const resetScanner = useCallback(() => {
     setStatus('SCANNER_SEARCHING');
     setRawCapturedUri(null);
@@ -265,6 +263,7 @@ export function useScannerEngine() {
     toggleAutoCapture,
     handleCameraReady,
     handleMountError,
+    retakeCurrentPage,
     resetScanner,
   };
 }
