@@ -13,8 +13,17 @@ interface DocumentState {
   loadDocuments: () => Promise<void>;
   setSearchQuery: (query: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
-  renameDocument: (id: string, newTitle: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
+  addDocument: (
+    title: string,
+    pages: Array<{
+      originalPath: string;
+      processedPath: string;
+      thumbnailPath: string;
+      width: number;
+      height: number;
+    }>
+  ) => Promise<Document>;
   selectDocument: (document: Document | null) => void;
 }
 
@@ -108,6 +117,30 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
         set({
           error: err instanceof Error ? err.message : 'Falha ao excluir documento',
         });
+      }
+    },
+
+    addDocument: async (title, pages) => {
+      set({ isLoading: true, error: null });
+      try {
+        const created = await repository.createDocument({
+          title,
+          pages: pages.map((p, idx) => ({
+            ...p,
+            pageIndex: idx,
+          })),
+        });
+        set((state) => ({
+          documents: [created, ...state.documents],
+          isLoading: false,
+        }));
+        return created;
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao salvar documento',
+          isLoading: false,
+        });
+        throw err;
       }
     },
 

@@ -3,25 +3,20 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
-import { ScannerStatus, DocumentDetection } from '../../types';
-
-export interface ScannerEngineState {
-  status: ScannerStatus;
-  hasPermission: boolean | null;
-  flash: 'off' | 'on';
-  autoCapture: boolean;
-  capturedUri: string | null;
-  confidence: number;
-  detection: DocumentDetection;
-}
+import { ScannerStatus, DocumentDetection, ScanFilterMode } from '../../types';
+import { ProcessingPipeline, ProcessedPageResult } from '../../services/processing';
 
 export function useScannerEngine() {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ScannerStatus>('SCANNER_SEARCHING');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [autoCapture, setAutoCapture] = useState<boolean>(true);
-  const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<ScanFilterMode>('auto');
   const [confidence, setConfidence] = useState<number>(0.85);
+
+  const [rawCapturedUri, setRawCapturedUri] = useState<string | null>(null);
+  const [processedResult, setProcessedResult] = useState<ProcessedPageResult | null>(null);
+  const [capturedPages, setCapturedPages] = useState<ProcessedPageResult[]>([]);
 
   const cameraRef = useRef<CameraView | null>(null);
   const autoCaptureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,11 +47,43 @@ export function useScannerEngine() {
 
     const timer = setTimeout(() => {
       setStatus('DOCUMENT_DETECTED');
-      setConfidence(0.92);
-    }, 1200);
+      setConfidence(0.94);
+    }, 1100);
 
     return () => clearTimeout(timer);
   }, [status]);
+
+  // Executa o processamento real da imagem através da esteira de processamento
+  const processCapturedImage = useCallback(
+    async (imageUri: string, mode: ScanFilterMode = filterMode) => {
+      setStatus('PROCESSING');
+      try {
+        const result = await ProcessingPipeline.processPage({
+          imageUri,
+          filterMode: mode,
+        });
+        setProcessedResult(result);
+        setStatus('CAPTURE_SUCCESS');
+        triggerHaptic();
+        return result;
+      } catch (err) {
+        console.error('Falha no pipeline de processamento de imagem:', err);
+        // Fallback seguro em caso de falha de codec
+        const fallbackResult: ProcessedPageResult = {
+          originalUri: imageUri,
+          processedUri: imageUri,
+          thumbnailUri: imageUri,
+          width: 1200,
+          height: 1600,
+          filterMode: mode,
+        };
+        setProcessedResult(fallbackResult);
+        setStatus('CAPTURE_SUCCESS');
+        return fallbackResult;
+      }
+    },
+    [filterMode, triggerHaptic]
+  );
 
   // Captura manual ou disparada pelo motor
   const captureDocument = useCallback(async (): Promise<string | null> => {
@@ -72,25 +99,19 @@ export function useScannerEngine() {
 
       if (cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.9,
+          quality: 0.92,
           shutterSound: true,
         });
         photoUri = photo?.uri ?? null;
       }
 
-      // Se executando em ambiente de teste ou web sem câmera física direta:
+      // Se executando em ambiente de teste sem câmera física disponível:
       if (!photoUri) {
         photoUri = `mock-captured-${Date.now()}.jpg`;
       }
 
-      setStatus('PROCESSING');
-
-      // Simulação rápida do pipeline de perspectiva (Fase 3)
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      setCapturedUri(photoUri);
-      setStatus('CAPTURE_SUCCESS');
-      triggerHaptic();
+      setRawCapturedUri(photoUri);
+      await processCapturedImage(photoUri, filterMode);
 
       return photoUri;
     } catch (err) {
@@ -98,14 +119,14 @@ export function useScannerEngine() {
       setStatus('CAPTURE_ERROR');
       return null;
     }
-  }, [status, triggerHaptic]);
+  }, [status, triggerHaptic, processCapturedImage, filterMode]);
 
   // Disparo automático quando o documento está estabilizado
   useEffect(() => {
     if (autoCapture && status === 'DOCUMENT_DETECTED') {
       autoCaptureTimerRef.current = setTimeout(() => {
         captureDocument();
-      }, 1500);
+      }, 1400);
     }
 
     return () => {
@@ -115,22 +136,30 @@ export function useScannerEngine() {
     };
   }, [autoCapture, status, captureDocument]);
 
+  // Alterar modo de filtro dinamicamente na tela de preview (Auto, P&B, Original)
+  const changeFilterMode = useCallback(
+    async (newMode: ScanFilterMode) => {
+      setFilterMode(newMode);
+      if (rawCapturedUri) {
+        await processCapturedImage(rawCapturedUri, newMode);
+      }
+    },
+    [rawCapturedUri, processCapturedImage]
+  );
+
   // Importar imagem da galeria
   const pickFromGallery = useCallback(async (): Promise<string | null> => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        quality: 0.9,
+        quality: 0.95,
         allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
-        setStatus('PROCESSING');
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setCapturedUri(uri);
-        setStatus('CAPTURE_SUCCESS');
-        triggerHaptic();
+        setRawCapturedUri(uri);
+        await processCapturedImage(uri, filterMode);
         return uri;
       }
       return null;
@@ -138,7 +167,16 @@ export function useScannerEngine() {
       console.error('Erro ao selecionar imagem da galeria:', err);
       return null;
     }
-  }, [triggerHaptic]);
+  }, [filterMode, processCapturedImage]);
+
+  const addCurrentPageToDocument = useCallback(() => {
+    if (processedResult) {
+      setCapturedPages((prev) => [...prev, processedResult]);
+    }
+    setStatus('SCANNER_SEARCHING');
+    setRawCapturedUri(null);
+    setProcessedResult(null);
+  }, [processedResult]);
 
   const toggleFlash = useCallback(() => {
     setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
@@ -150,7 +188,8 @@ export function useScannerEngine() {
 
   const resetScanner = useCallback(() => {
     setStatus('SCANNER_SEARCHING');
-    setCapturedUri(null);
+    setRawCapturedUri(null);
+    setProcessedResult(null);
     setConfidence(0);
   }, []);
 
@@ -162,10 +201,15 @@ export function useScannerEngine() {
     requestPermission,
     flash,
     autoCapture,
-    capturedUri,
+    filterMode,
+    rawCapturedUri,
+    processedResult,
+    capturedPages,
     confidence,
     captureDocument,
     pickFromGallery,
+    changeFilterMode,
+    addCurrentPageToDocument,
     toggleFlash,
     toggleAutoCapture,
     resetScanner,

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
@@ -16,10 +17,11 @@ import { AppButton } from '../../components/ui';
 import { CaptureButton, ScannerOverlay } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore } from '../../store';
+import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const { loadDocuments } = useDocumentStore();
+  const { addDocument } = useDocumentStore();
 
   const {
     cameraRef,
@@ -28,10 +30,14 @@ export default function ScannerScreen() {
     requestPermission,
     flash,
     autoCapture,
-    capturedUri,
+    filterMode,
+    processedResult,
+    capturedPages,
     confidence,
     captureDocument,
     pickFromGallery,
+    changeFilterMode,
+    addCurrentPageToDocument,
     toggleFlash,
     toggleAutoCapture,
     resetScanner,
@@ -66,11 +72,33 @@ export default function ScannerScreen() {
     );
   }
 
+  // Concluir e salvar o documento no repositório local
   const handleFinishScan = async () => {
-    // Ao concluir, recarrega a biblioteca e retorna para a tela inicial
-    await loadDocuments();
+    const allPages = [...capturedPages];
+    if (processedResult) {
+      allPages.push(processedResult);
+    }
+
+    if (allPages.length > 0) {
+      const now = new Date();
+      const title = `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+      await addDocument(
+        title,
+        allPages.map((page) => ({
+          originalPath: page.originalUri,
+          processedPath: page.processedUri,
+          thumbnailPath: page.thumbnailUri,
+          width: page.width,
+          height: page.height,
+        }))
+      );
+    }
+
     router.replace('/');
   };
+
+  const totalPagesCount = capturedPages.length + (processedResult ? 1 : 0);
 
   return (
     <View style={styles.container}>
@@ -147,55 +175,137 @@ export default function ScannerScreen() {
               />
             </View>
 
-            {/* Indicador de Páginas */}
+            {/* Indicador de Páginas Acumuladas */}
             <View style={styles.pagesIndicatorContainer}>
-              <Text style={styles.pagesIndicatorNumber}>1</Text>
-              <Text style={styles.pagesIndicatorLabel}>Página</Text>
+              <Text style={styles.pagesIndicatorNumber}>{totalPagesCount}</Text>
+              <Text style={styles.pagesIndicatorLabel}>
+                {totalPagesCount === 1 ? 'Página' : 'Páginas'}
+              </Text>
             </View>
           </View>
         </SafeAreaView>
       </CameraView>
 
-      {/* Modal / Feedback de Magic Moment pós-captura */}
+      {/* Modal / Feedback de Magic Moment pós-captura com Seleção de Filtros */}
       <Modal
-        visible={status === 'CAPTURE_SUCCESS'}
+        visible={status === 'CAPTURE_SUCCESS' && processedResult !== null}
         animationType="slide"
         transparent={true}
         onRequestClose={resetScanner}
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContent}>
+            {/* Header com indicador de sucesso */}
             <View style={styles.successBadge}>
-              <Ionicons name="checkmark-circle" size={36} color={colors.success} />
-              <Text style={styles.modalTitle}>Página Digitalizada!</Text>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <Text style={styles.modalTitle}>
+                Página {capturedPages.length + 1} Processada
+              </Text>
             </View>
 
+            {/* Pré-visualização da Imagem Tratada com Alta Fidelidade */}
             <View style={styles.previewImageContainer}>
-              {capturedUri && capturedUri.startsWith('http') ? (
-                <Image source={{ uri: capturedUri }} style={styles.previewImage} />
+              {processedResult?.processedUri ? (
+                <Image
+                  source={{ uri: processedResult.processedUri }}
+                  style={styles.previewImage}
+                />
               ) : (
                 <View style={styles.placeholderPreview}>
-                  <Ionicons name="document-text" size={64} color={colors.primary} />
-                  <Text style={styles.previewDocName}>Recorte automático e perspectiva aplicados</Text>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.previewDocName}>Otimizando qualidade...</Text>
                 </View>
               )}
             </View>
 
+            {/* Seletor de Modos de Realce (Fase 3) */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Modo de Realce:</Text>
+              <View style={styles.filterPills}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    filterMode === 'auto' && styles.filterChipActive,
+                  ]}
+                  onPress={() => changeFilterMode('auto')}
+                >
+                  <Ionicons
+                    name="sparkles"
+                    size={14}
+                    color={filterMode === 'auto' ? '#FFFFFF' : colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterMode === 'auto' && styles.filterChipTextActive,
+                    ]}
+                  >
+                    Automático
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    filterMode === 'black_and_white' && styles.filterChipActive,
+                  ]}
+                  onPress={() => changeFilterMode('black_and_white')}
+                >
+                  <Ionicons
+                    name="contrast"
+                    size={14}
+                    color={filterMode === 'black_and_white' ? '#FFFFFF' : colors.textPrimary}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterMode === 'black_and_white' && styles.filterChipTextActive,
+                    ]}
+                  >
+                    Preto e Branco
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    filterMode === 'original' && styles.filterChipActive,
+                  ]}
+                  onPress={() => changeFilterMode('original')}
+                >
+                  <Ionicons
+                    name="image-outline"
+                    size={14}
+                    color={filterMode === 'original' ? '#FFFFFF' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterMode === 'original' && styles.filterChipTextActive,
+                    ]}
+                  >
+                    Original
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Ações de Conclusão ou Continuação */}
             <View style={styles.modalActions}>
               <AppButton
-                title="Adicionar Outra Página"
+                title="Adicionar Mais Páginas"
                 variant="secondary"
-                onPress={resetScanner}
+                onPress={addCurrentPageToDocument}
                 style={styles.modalButton}
                 icon={<Ionicons name="add" size={20} color={colors.primary} />}
               />
 
               <AppButton
-                title="Concluir e Gerar PDF"
+                title="Concluir e Salvar Documento"
                 variant="primary"
                 onPress={handleFinishScan}
                 style={styles.modalButton}
-                icon={<Ionicons name="document-outline" size={20} color="#FFFFFF" />}
+                icon={<Ionicons name="checkmark-done" size={20} color="#FFFFFF" />}
               />
             </View>
           </View>
@@ -341,13 +451,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radii.sheets,
     borderTopRightRadius: radii.sheets,
     padding: spacing.default,
-    paddingBottom: spacing.hero,
+    paddingBottom: spacing.section,
     alignItems: 'center',
+    maxHeight: '90%',
   },
   successBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.default,
+    marginBottom: spacing.compact,
     gap: spacing.small,
   },
   modalTitle: {
@@ -356,11 +467,11 @@ const styles = StyleSheet.create({
   },
   previewImageContainer: {
     width: 200,
-    height: 260,
+    height: 250,
     backgroundColor: colors.background,
     borderRadius: radii.cards,
     overflow: 'hidden',
-    marginBottom: spacing.section,
+    marginBottom: spacing.compact,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -369,7 +480,7 @@ const styles = StyleSheet.create({
   previewImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   placeholderPreview: {
     alignItems: 'center',
@@ -381,6 +492,44 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.small,
+  },
+  filterSection: {
+    width: '100%',
+    marginBottom: spacing.default,
+    alignItems: 'center',
+  },
+  filterLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.micro + 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterPills: {
+    flexDirection: 'row',
+    gap: spacing.small,
+    justifyContent: 'center',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.micro + 2,
+    paddingHorizontal: spacing.compact,
+    borderRadius: radii.capsule,
+    backgroundColor: '#F0F0F2',
+    minHeight: 34,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+  },
+  filterChipText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   modalActions: {
     width: '100%',
