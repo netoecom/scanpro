@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { ScannerStatus, DocumentDetection, ScanFilterMode } from '../../types';
 import { ProcessingPipeline, ProcessedPageResult } from '../../services/processing';
 import { OcrService } from '../../services/ocr/ocrService';
+import { WebCameraViewRef } from '../../components/scanner/WebCameraView';
 
 export function useScannerEngine() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -23,6 +24,7 @@ export function useScannerEngine() {
   const [capturedPages, setCapturedPages] = useState<ProcessedPageResult[]>([]);
 
   const cameraRef = useRef<CameraView | null>(null);
+  const webCameraRef = useRef<WebCameraViewRef | null>(null);
   const autoCaptureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trigger feedback tátil
@@ -139,7 +141,9 @@ export function useScannerEngine() {
 
       let photoUri: string | null = null;
 
-      if (cameraRef.current) {
+      if (Platform.OS === 'web' && webCameraRef.current) {
+        photoUri = await webCameraRef.current.takePicture();
+      } else if (cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.92,
           shutterSound: true,
@@ -237,6 +241,7 @@ export function useScannerEngine() {
 
   return {
     cameraRef,
+    webCameraRef,
     status,
     hasPermission: permission?.granted ?? false,
     canAskAgain: permission?.canAskAgain ?? true,

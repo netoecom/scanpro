@@ -16,6 +16,7 @@
       }
     },
     "android": {
+      "package": "com.scanpro.app",
       "permissions": [
         "android.permission.CAMERA"
       ],
@@ -27,7 +28,8 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",

@@ -15,7 +15,7 @@ import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget } from '../../theme';
 import { AppButton, PageStrip } from '../../components/ui';
-import { CaptureButton, ScannerOverlay } from '../../components/scanner';
+import { CaptureButton, ScannerOverlay, WebCameraView } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore } from '../../store';
 import { ScanFilterMode } from '../../types';
@@ -26,6 +26,7 @@ export default function ScannerScreen() {
 
   const {
     cameraRef,
+    webCameraRef,
     status,
     hasPermission,
     requestPermission,
@@ -117,108 +118,117 @@ export default function ScannerScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Visualizador da Câmera em Tela Inteira */}
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        facing={facing}
-        enableTorch={flash === 'on'}
-        onCameraReady={handleCameraReady}
-        onMountError={handleMountError}
-      >
-        {/* Camada de Overlay e Detecção Visual */}
-        <ScannerOverlay
-          status={status}
-          confidence={confidence}
-          autoCapture={autoCapture}
+      {/* Visualizador da Câmera (HTML5 no Web/PWA, CameraView no Mobile Nativo) */}
+      {Platform.OS === 'web' ? (
+        <WebCameraView
+          ref={webCameraRef}
+          facing={facing}
+          onCameraReady={handleCameraReady}
+          onMountError={handleMountError}
         />
+      ) : (
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing={facing}
+          enableTorch={flash === 'on'}
+          onCameraReady={handleCameraReady}
+          onMountError={handleMountError}
+        />
+      )}
 
-        <SafeAreaView style={styles.controlsSafeArea} pointerEvents="box-none">
-          {/* Barra Superior de Controles */}
-          <View style={styles.topControls}>
+      {/* Camada de Overlay e Detecção Visual */}
+      <ScannerOverlay
+        status={status}
+        confidence={confidence}
+        autoCapture={autoCapture}
+      />
+
+      <SafeAreaView style={styles.controlsSafeArea} pointerEvents="box-none">
+        {/* Barra Superior de Controles */}
+        <View style={styles.topControls}>
+          <TouchableOpacity
+            style={styles.circleButton}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <View style={styles.topRightControls}>
+            {/* Botão de Alternar Câmera (Frontal / Traseira) */}
             <TouchableOpacity
               style={styles.circleButton}
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+              onPress={toggleFacing}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="close" size={24} color="#FFFFFF" />
+              <Ionicons name="camera-reverse-outline" size={22} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <View style={styles.topRightControls}>
-              {/* Botão de Alternar Câmera (Frontal / Traseira) */}
-              <TouchableOpacity
-                style={styles.circleButton}
-                onPress={toggleFacing}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="camera-reverse-outline" size={22} color="#FFFFFF" />
-              </TouchableOpacity>
-
-              {/* Botão Auto / Manual */}
-              <TouchableOpacity
-                style={[styles.pillButton, autoCapture && styles.pillButtonActive]}
-                onPress={toggleAutoCapture}
-              >
-                <Text style={styles.pillButtonText}>
-                  {autoCapture ? 'AUTO' : 'MANUAL'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Botão Flash */}
-              <TouchableOpacity
-                style={styles.circleButton}
-                onPress={toggleFlash}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons
-                  name={flash === 'on' ? 'flash' : 'flash-off'}
-                  size={22}
-                  color={flash === 'on' ? colors.warning : '#FFFFFF'}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Banner de Status ou Alerta de Câmera */}
-          {cameraError && (
-            <View style={styles.cameraErrorBanner}>
-              <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.cameraErrorText}>{cameraError}</Text>
-            </View>
-          )}
-
-          {/* Barra Inferior de Disparo */}
-          <View style={styles.bottomControls}>
-            {/* Atalho para importar da galeria */}
+            {/* Botão Auto / Manual */}
             <TouchableOpacity
-              style={styles.secondaryActionButton}
-              onPress={pickFromGallery}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[styles.pillButton, autoCapture && styles.pillButtonActive]}
+              onPress={toggleAutoCapture}
             >
-              <Ionicons name="images-outline" size={28} color="#FFFFFF" />
-              <Text style={styles.secondaryActionText}>Galeria</Text>
+              <Text style={styles.pillButtonText}>
+                {autoCapture ? 'AUTO' : 'MANUAL'}
+              </Text>
             </TouchableOpacity>
 
-            {/* Botão Central de Disparo Dominante */}
-            <View style={styles.captureButtonContainer}>
-              <CaptureButton
-                onPress={captureDocument}
-                disabled={status === 'CAPTURING' || status === 'PROCESSING'}
-                loading={status === 'CAPTURING' || status === 'PROCESSING'}
-                autoCaptureActive={autoCapture}
+            {/* Botão Flash */}
+            <TouchableOpacity
+              style={styles.circleButton}
+              onPress={toggleFlash}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons
+                name={flash === 'on' ? 'flash' : 'flash-off'}
+                size={22}
+                color={flash === 'on' ? colors.warning : '#FFFFFF'}
               />
-            </View>
-
-            {/* Indicador de Páginas Acumuladas */}
-            <View style={styles.pagesIndicatorContainer}>
-              <Text style={styles.pagesIndicatorNumber}>{totalPagesCount}</Text>
-              <Text style={styles.pagesIndicatorLabel}>
-                {totalPagesCount === 1 ? 'Página' : 'Páginas'}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
-        </SafeAreaView>
-      </CameraView>
+        </View>
+
+        {/* Banner de Status ou Alerta de Câmera */}
+        {cameraError && (
+          <View style={styles.cameraErrorBanner}>
+            <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.cameraErrorText}>{cameraError}</Text>
+          </View>
+        )}
+
+        {/* Barra Inferior de Disparo */}
+        <View style={styles.bottomControls}>
+          {/* Atalho para importar da galeria */}
+          <TouchableOpacity
+            style={styles.secondaryActionButton}
+            onPress={pickFromGallery}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="images-outline" size={28} color="#FFFFFF" />
+            <Text style={styles.secondaryActionText}>Galeria</Text>
+          </TouchableOpacity>
+
+          {/* Botão Central de Disparo Dominante */}
+          <View style={styles.captureButtonContainer}>
+            <CaptureButton
+              onPress={captureDocument}
+              disabled={status === 'CAPTURING' || status === 'PROCESSING'}
+              loading={status === 'CAPTURING' || status === 'PROCESSING'}
+              autoCaptureActive={autoCapture}
+            />
+          </View>
+
+          {/* Indicador de Páginas Acumuladas */}
+          <View style={styles.pagesIndicatorContainer}>
+            <Text style={styles.pagesIndicatorNumber}>{totalPagesCount}</Text>
+            <Text style={styles.pagesIndicatorLabel}>
+              {totalPagesCount === 1 ? 'Página' : 'Páginas'}
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
 
       {/* Modal / Feedback de Magic Moment pós-captura com Seleção de Filtros */}
       <Modal
