@@ -11,6 +11,9 @@ export function useScannerEngine() {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ScannerStatus>('SCANNER_SEARCHING');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [autoCapture, setAutoCapture] = useState<boolean>(true);
   const [filterMode, setFilterMode] = useState<ScanFilterMode>('auto');
   const [confidence, setConfidence] = useState<number>(0.85);
@@ -39,6 +42,29 @@ export function useScannerEngine() {
       requestPermission();
     }
   }, [permission, requestPermission]);
+
+  const toggleFacing = useCallback(() => {
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+    setCameraError(null);
+  }, []);
+
+  const handleCameraReady = useCallback(() => {
+    setIsCameraReady(true);
+    setCameraError(null);
+  }, []);
+
+  const handleMountError = useCallback((error: any) => {
+    console.warn('Erro ao inicializar câmera:', error);
+    // Se falhou ao tentar usar câmera traseira (comum em desktop/web), tenta frontal
+    setFacing((prev) => {
+      if (prev === 'back') {
+        setCameraError('Câmera traseira indisponível. Tentando câmera frontal...');
+        return 'front';
+      }
+      setCameraError('Câmera indisponível ou permissão bloqueada pelo navegador.');
+      return prev;
+    });
+  }, []);
 
   // Simulação inteligente de detecção contínua de documento com cooldown
   useEffect(() => {
@@ -216,6 +242,9 @@ export function useScannerEngine() {
     canAskAgain: permission?.canAskAgain ?? true,
     requestPermission,
     flash,
+    facing,
+    isCameraReady,
+    cameraError,
     autoCapture,
     filterMode,
     rawCapturedUri,
@@ -227,7 +256,10 @@ export function useScannerEngine() {
     changeFilterMode,
     addCurrentPageToDocument,
     toggleFlash,
+    toggleFacing,
     toggleAutoCapture,
+    handleCameraReady,
+    handleMountError,
     resetScanner,
   };
 }

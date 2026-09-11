@@ -8,6 +8,7 @@ import {
   Modal,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
@@ -29,6 +30,9 @@ export default function ScannerScreen() {
     hasPermission,
     requestPermission,
     flash,
+    facing,
+    isCameraReady,
+    cameraError,
     autoCapture,
     filterMode,
     processedResult,
@@ -39,7 +43,10 @@ export default function ScannerScreen() {
     changeFilterMode,
     addCurrentPageToDocument,
     toggleFlash,
+    toggleFacing,
     toggleAutoCapture,
+    handleCameraReady,
+    handleMountError,
     resetScanner,
   } = useScannerEngine();
 
@@ -114,8 +121,10 @@ export default function ScannerScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
         enableTorch={flash === 'on'}
+        onCameraReady={handleCameraReady}
+        onMountError={handleMountError}
       >
         {/* Camada de Overlay e Detecção Visual */}
         <ScannerOverlay
@@ -136,6 +145,15 @@ export default function ScannerScreen() {
             </TouchableOpacity>
 
             <View style={styles.topRightControls}>
+              {/* Botão de Alternar Câmera (Frontal / Traseira) */}
+              <TouchableOpacity
+                style={styles.circleButton}
+                onPress={toggleFacing}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="camera-reverse-outline" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+
               {/* Botão Auto / Manual */}
               <TouchableOpacity
                 style={[styles.pillButton, autoCapture && styles.pillButtonActive]}
@@ -160,6 +178,14 @@ export default function ScannerScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Banner de Status ou Alerta de Câmera */}
+          {cameraError && (
+            <View style={styles.cameraErrorBanner}>
+              <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.cameraErrorText}>{cameraError}</Text>
+            </View>
+          )}
 
           {/* Barra Inferior de Disparo */}
           <View style={styles.bottomControls}>
@@ -349,6 +375,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+    height: '100%',
+    width: '100%',
+  },
+  cameraErrorBanner: {
+    marginHorizontal: spacing.default,
+    marginTop: spacing.small,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: radii.standard,
+    paddingHorizontal: spacing.compact,
+    paddingVertical: spacing.small,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  cameraErrorText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    flex: 1,
   },
   controlsSafeArea: {
     flex: 1,
