@@ -53,3 +53,19 @@ export interface UpdateDocumentInput {
   pageCount?: number;
   syncStatus?: SyncStatus;
 }
+
+export interface User {
+  id: string;
+  email?: string;
+  createdAt: string;
+}
+
+export interface Subscription {
+  userId: string;
+  entitlement: string;
+  status: 'active' | 'inactive' | 'trial' | 'expired';
+  providerCustomerId?: string;
+  updatedAt: string;
+}
+
+
