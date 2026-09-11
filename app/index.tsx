@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,29 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../theme';
-import { DocumentCard, EmptyState, BottomTabBar } from '../components/ui';
+import { DocumentCard, EmptyState, BottomTabBar, OnboardingInstallModal } from '../components/ui';
 import { useDocumentStore } from '../store';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { documents, loadDocuments, toggleFavorite } = useDocumentStore();
+  const { isInstalled } = usePwaInstall();
+
+  const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
 
   useEffect(() => {
     loadDocuments();
-  }, [loadDocuments]);
+
+    // Abre o onboarding na primeira vez na web se o app não estiver instalado
+    if (typeof window !== 'undefined' && !isInstalled) {
+      const hasSeen = localStorage.getItem('scanpro_has_seen_onboarding');
+      if (!hasSeen) {
+        setIsOnboardingVisible(true);
+        localStorage.setItem('scanpro_has_seen_onboarding', 'true');
+      }
+    }
+  }, [loadDocuments, isInstalled]);
 
   const handleScanPress = () => {
     router.push('/scanner' as any);
@@ -58,6 +71,28 @@ export default function HomeScreen() {
               <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
+
+          {/* Banner de Instalação Rápida com 1 Clique */}
+          {!isInstalled && (
+            <TouchableOpacity
+              style={[styles.installBanner, shadows.subtle]}
+              activeOpacity={0.88}
+              onPress={() => setIsOnboardingVisible(true)}
+            >
+              <View style={styles.installBannerIcon}>
+                <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.installBannerContent}>
+                <Text style={styles.installBannerTitle}>Instalar ScanPro no Celular</Text>
+                <Text style={styles.installBannerSubtitle}>
+                  Ative a câmera, notificações e instale com 1 clique
+                </Text>
+              </View>
+              <View style={styles.installBannerPill}>
+                <Text style={styles.installBannerPillText}>Ativar</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* CTA Principal de Scanner (Visualmente Dominante) */}
           <View style={styles.heroCtaContainer}>
@@ -118,6 +153,13 @@ export default function HomeScreen() {
 
       {/* Navegação Inferior (BottomTabBar) */}
       <BottomTabBar onScanPress={handleScanPress} />
+
+      {/* Modal de Onboarding e Instalação em 1 Clique */}
+      <OnboardingInstallModal
+        visible={isOnboardingVisible}
+        onClose={() => setIsOnboardingVisible(false)}
+        onStartScanning={handleScanPress}
+      />
     </SafeAreaView>
   );
 }
@@ -155,6 +197,50 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.minSize,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  installBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.standard,
+    padding: spacing.compact,
+    marginBottom: spacing.default,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  installBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.small,
+  },
+  installBannerContent: {
+    flex: 1,
+    marginRight: spacing.micro,
+  },
+  installBannerTitle: {
+    ...typography.subheadline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  installBannerSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  installBannerPill: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.compact,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  installBannerPillText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   heroCtaContainer: {
     marginBottom: spacing.large,

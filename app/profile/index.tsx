@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
-import { BottomTabBar, AppButton } from '../../components/ui';
+import { BottomTabBar, AppButton, OnboardingInstallModal } from '../../components/ui';
 import { useDocumentStore } from '../../store';
 import { AuthService } from '../../services/auth';
 import { SyncService, SyncOverview } from '../../services/sync';
@@ -30,6 +30,7 @@ export default function ProfileScreen() {
   const [isRestoreModalVisible, setIsRestoreModalVisible] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [backupJsonInput, setBackupJsonInput] = useState('');
+  const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
 
   const totalPages = documents.reduce((acc, doc) => acc + doc.pageCount, 0);
 
@@ -227,6 +228,29 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Instalação do App & Permissões */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Experiência no Celular</Text>
+          <View style={[styles.menuCard, shadows.card]}>
+            <TouchableOpacity
+              style={styles.onboardingMenuItem}
+              onPress={() => setIsOnboardingVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.onboardingIconWrap}>
+                <Ionicons name="sparkles" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.onboardingMenuTitle}>Instalar App & Permissões</Text>
+                <Text style={styles.onboardingMenuSubtitle}>
+                  Ativar em 1 clique: PWA, câmera e notificações
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Sobre o Aplicativo */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Sobre o ScanPro</Text>
@@ -334,6 +358,11 @@ export default function ProfileScreen() {
       </Modal>
 
       <BottomTabBar />
+
+      <OnboardingInstallModal
+        visible={isOnboardingVisible}
+        onClose={() => setIsOnboardingVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -583,5 +612,28 @@ const styles = StyleSheet.create({
   dialogActions: {
     flexDirection: 'row',
     gap: spacing.small,
+  },
+  onboardingMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.micro,
+  },
+  onboardingIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.small,
+  },
+  onboardingMenuTitle: {
+    ...typography.headline,
+    color: colors.textPrimary,
+  },
+  onboardingMenuSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
