@@ -26,8 +26,8 @@ export default function HomeScreen() {
     router.push('/scanner' as any);
   };
 
-  const handleDocumentPress = (title: string) => {
-    Alert.alert('Visualizar Documento', title);
+  const handleDocumentPress = (id: string) => {
+    router.push(`/document/${id}` as any);
   };
 
   const getGreeting = () => {
@@ -107,7 +107,7 @@ export default function HomeScreen() {
                 <DocumentCard
                   key={doc.id}
                   document={doc}
-                  onPress={() => handleDocumentPress(doc.title)}
+                  onPress={() => handleDocumentPress(doc.id)}
                   onToggleFavorite={() => toggleFavorite(doc.id)}
                 />
               ))}

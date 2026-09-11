@@ -10,4 +10,5 @@ export interface DocumentRepository {
   getDocumentPages(documentId: string): Promise<DocumentPage[]>;
   addPage(documentId: string, page: Omit<DocumentPage, 'id' | 'documentId' | 'createdAt'>): Promise<DocumentPage>;
   deletePage(documentId: string, pageId: string): Promise<void>;
+  reorderPages(documentId: string, pageIdsInOrder: string[]): Promise<DocumentPage[]>;
 }

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors, spacing, typography, radii, touchTarget } from '../../theme';
 import { SearchField, DocumentCard, EmptyState, BottomTabBar } from '../../components/ui';
 import { useDocumentStore } from '../../store';
@@ -15,6 +16,7 @@ import { useDocumentStore } from '../../store';
 type FilterTab = 'all' | 'favorites';
 
 export default function DocumentsScreen() {
+  const router = useRouter();
   const { documents, searchQuery, setSearchQuery, toggleFavorite, deleteDocument, loadDocuments } =
     useDocumentStore();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -121,7 +123,7 @@ export default function DocumentsScreen() {
               <DocumentCard
                 key={doc.id}
                 document={doc}
-                onPress={() => handleDocumentOptions(doc.id, doc.title)}
+                onPress={() => router.push(`/document/${doc.id}` as any)}
                 onToggleFavorite={() => toggleFavorite(doc.id)}
               />
             ))

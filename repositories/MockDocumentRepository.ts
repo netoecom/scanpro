@@ -180,4 +180,29 @@ export class MockDocumentRepository implements DocumentRepository {
       this.documents.set(documentId, existingDoc);
     }
   }
+
+  async reorderPages(documentId: string, pageIdsInOrder: string[]): Promise<DocumentPage[]> {
+    const docPages = this.pages.get(documentId);
+    if (!docPages) return [];
+
+    const pageMap = new Map(docPages.map((p) => [p.id, p]));
+    const reordered: DocumentPage[] = [];
+
+    pageIdsInOrder.forEach((id, index) => {
+      const page = pageMap.get(id);
+      if (page) {
+        reordered.push({ ...page, pageIndex: index });
+      }
+    });
+
+    this.pages.set(documentId, reordered);
+
+    const existingDoc = this.documents.get(documentId);
+    if (existingDoc) {
+      existingDoc.updatedAt = new Date().toISOString();
+      this.documents.set(documentId, existingDoc);
+    }
+
+    return reordered;
+  }
 }

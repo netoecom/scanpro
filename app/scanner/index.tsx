@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget } from '../../theme';
-import { AppButton } from '../../components/ui';
+import { AppButton, PageStrip } from '../../components/ui';
 import { CaptureButton, ScannerOverlay } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore } from '../../store';
@@ -217,6 +217,28 @@ export default function ScannerScreen() {
                 </View>
               )}
             </View>
+
+            {/* Faixa de Páginas Acumuladas da Sessão (Multi-page) */}
+            {capturedPages.length > 0 && (
+              <View style={{ width: '100%', marginBottom: spacing.small }}>
+                <Text style={styles.filterLabel}>
+                  Páginas Deste Documento ({totalPagesCount}):
+                </Text>
+                <PageStrip
+                  pages={[
+                    ...capturedPages.map((p, idx) => ({
+                      id: `prev-${idx}`,
+                      uri: p.thumbnailUri || p.processedUri,
+                    })),
+                    ...(processedResult
+                      ? [{ id: 'current', uri: processedResult.thumbnailUri || processedResult.processedUri }]
+                      : []),
+                  ]}
+                  selectedIndex={capturedPages.length}
+                  onSelectPage={() => {}}
+                />
+              </View>
+            )}
 
             {/* Seletor de Modos de Realce (Fase 3) */}
             <View style={styles.filterSection}>

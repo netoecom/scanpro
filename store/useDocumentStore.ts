@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { Document } from '../types';
+import { Document, DocumentPage } from '../types';
 import { defaultDocumentRepository, DocumentRepository } from '../repositories';
 
 interface DocumentState {
   documents: Document[];
   selectedDocument: Document | null;
+  currentPages: DocumentPage[];
   isLoading: boolean;
   error: string | null;
   searchQuery: string;
@@ -24,6 +25,9 @@ interface DocumentState {
       height: number;
     }>
   ) => Promise<Document>;
+  loadDocumentPages: (documentId: string) => Promise<DocumentPage[]>;
+  reorderDocumentPages: (documentId: string, pageIdsInOrder: string[]) => Promise<void>;
+  deleteDocumentPage: (documentId: string, pageId: string) => Promise<void>;
   selectDocument: (document: Document | null) => void;
 }
 
@@ -33,6 +37,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
   return {
     documents: [],
     selectedDocument: null,
+    currentPages: [],
     isLoading: false,
     error: null,
     searchQuery: '',
@@ -141,6 +146,50 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
           isLoading: false,
         });
         throw err;
+      }
+    },
+
+    loadDocumentPages: async (documentId: string) => {
+      set({ isLoading: true, error: null });
+      try {
+        const pages = await repository.getDocumentPages(documentId);
+        set({ currentPages: pages, isLoading: false });
+        return pages;
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao carregar páginas',
+          isLoading: false,
+        });
+        return [];
+      }
+    },
+
+    reorderDocumentPages: async (documentId: string, pageIdsInOrder: string[]) => {
+      try {
+        const reordered = await repository.reorderPages(documentId, pageIdsInOrder);
+        set({ currentPages: reordered });
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao reordenar páginas',
+        });
+      }
+    },
+
+    deleteDocumentPage: async (documentId: string, pageId: string) => {
+      try {
+        await repository.deletePage(documentId, pageId);
+        set((state) => ({
+          currentPages: state.currentPages.filter((p) => p.id !== pageId),
+          documents: state.documents.map((doc) =>
+            doc.id === documentId
+              ? { ...doc, pageCount: Math.max(0, doc.pageCount - 1) }
+              : doc
+          ),
+        }));
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao excluir página',
+        });
       }
     },
 

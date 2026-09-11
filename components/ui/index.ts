@@ -3,3 +3,5 @@ export * from './DocumentCard';
 export * from './EmptyState';
 export * from './SearchField';
 export * from './BottomTabBar';
+export * from './PageThumbnail';
+export * from './PageStrip';
