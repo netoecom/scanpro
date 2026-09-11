@@ -86,7 +86,7 @@ function applyCanvasFilterWeb(uri: string, mode: ScanFilterMode): Promise<string
       }
 
       ctx.putImageData(imageData, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg', 0.92));
+      resolve(canvas.toDataURL('image/jpeg', 0.98));
     };
 
     img.onerror = () => {

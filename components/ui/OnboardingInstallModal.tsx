@@ -3,7 +3,7 @@
  * Experiência rica e fluida para instalação do app, permissões de câmera e notificações.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -40,8 +40,21 @@ export function OnboardingInstallModal({
     setupAllInOneClick,
   } = usePwaInstall();
 
+  const [showManualGuide, setShowManualGuide] = useState(false);
+
+  const handleInstallPress = async () => {
+    const success = await promptInstall();
+    if (!success) {
+      setShowManualGuide(true);
+    }
+  };
+
   const handleMasterAction = async () => {
     await setupAllInOneClick();
+    if (!isInstalled && !isInstallable) {
+      setShowManualGuide(true);
+      return;
+    }
     if (onStartScanning) {
       onClose();
       onStartScanning();
@@ -71,7 +84,7 @@ export function OnboardingInstallModal({
               </View>
               <Text style={styles.title}>Bem-vindo ao ScanPro</Text>
               <Text style={styles.subtitle}>
-                Configure o aplicativo em segundos para obter máxima qualidade e performance.
+                Configure o aplicativo para máxima nitidez de câmera e funcionamento offline.
               </Text>
             </View>
 
@@ -99,22 +112,37 @@ export function OnboardingInstallModal({
                       : 'Abra em tela cheia com acesso instantâneo'}
                   </Text>
                 </View>
-                {!isInstalled && isInstallable && (
-                  <TouchableOpacity style={styles.actionPill} onPress={promptInstall}>
+                {!isInstalled && (
+                  <TouchableOpacity style={styles.actionPill} onPress={handleInstallPress}>
                     <Text style={styles.actionPillText}>Instalar</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* Dica para iOS Safari */}
-              {!isInstalled && isIOS && (
-                <View style={styles.iosTipBox}>
-                  <Ionicons name="information-circle" size={18} color={colors.primary} />
-                  <Text style={styles.iosTipText}>
-                    No iPhone/iPad: toque em <Text style={{ fontWeight: '700' }}>Compartilhar</Text>{' '}
-                    (ícone com seta) e escolha{' '}
-                    <Text style={{ fontWeight: '700' }}>"Adicionar à Tela de Início"</Text>.
-                  </Text>
+              {/* Guia Manual de Instalação (se o prompt automático não disparou) */}
+              {(!isInstalled && (isIOS || showManualGuide)) && (
+                <View style={styles.guideBox}>
+                  <Ionicons name="information-circle" size={20} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.guideBoxTitle}>
+                      {isIOS ? 'Como instalar no iPhone / iPad:' : 'Como instalar no seu navegador:'}
+                    </Text>
+                    <Text style={styles.guideBoxText}>
+                      {isIOS ? (
+                        <>
+                          Toque no botão <Text style={{ fontWeight: '700' }}>Compartilhar</Text>{' '}
+                          (ícone quadrado com seta) e selecione{' '}
+                          <Text style={{ fontWeight: '700' }}>"Adicionar à Tela de Início"</Text>.
+                        </>
+                      ) : (
+                        <>
+                          Toque nos <Text style={{ fontWeight: '700' }}>3 pontos (⋮)</Text> no topo do navegador e selecione{' '}
+                          <Text style={{ fontWeight: '700' }}>"Instalar aplicativo"</Text> ou{' '}
+                          <Text style={{ fontWeight: '700' }}>"Adicionar à tela inicial"</Text>.
+                        </>
+                      )}
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -137,7 +165,7 @@ export function OnboardingInstallModal({
                   <Text style={styles.itemSubtitle}>
                     {hasCameraPermission
                       ? 'Câmera autorizada para escaneamento'
-                      : 'Detecção automática e corte de páginas'}
+                      : 'Resolução fotográfica e corte de folhas'}
                   </Text>
                 </View>
                 {!hasCameraPermission && (
@@ -166,7 +194,7 @@ export function OnboardingInstallModal({
                   <Text style={styles.itemSubtitle}>
                     {hasNotificationPermission
                       ? 'Alertas e avisos ativados'
-                      : 'Avisos de backup e sincronização'}
+                      : 'Avisos de backup e exportação de PDF'}
                   </Text>
                 </View>
                 {!hasNotificationPermission && (
@@ -310,20 +338,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  iosTipBox: {
+  guideBox: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.small,
     backgroundColor: '#EBF4FF',
-    padding: spacing.small,
+    padding: spacing.compact,
     borderRadius: radii.standard,
-    marginTop: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.2)',
   },
-  iosTipText: {
+  guideBoxTitle: {
+    ...typography.subheadline,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  guideBoxText: {
     ...typography.caption,
     color: colors.textPrimary,
-    flex: 1,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   footerActions: {
     gap: spacing.micro,

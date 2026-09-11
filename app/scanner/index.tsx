@@ -231,53 +231,60 @@ export default function ScannerScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Modal / Feedback de Magic Moment pós-captura com Seleção de Filtros */}
+      {/* Modal / Tela Cheia de Prévia pós-captura com visualização expandida e seleção de filtros */}
       <Modal
         visible={status === 'CAPTURE_SUCCESS' && processedResult !== null}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={resetScanner}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={retakeCurrentPage}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
-            {/* Botão de Fechar / Voltar para a Captura */}
+        <SafeAreaView style={styles.fullPreviewContainer}>
+          {/* Header Superior da Prévia em Tela Cheia */}
+          <View style={styles.fullPreviewHeader}>
             <TouchableOpacity
-              style={styles.modalCloseButton}
+              style={styles.fullPreviewBackButton}
               onPress={retakeCurrentPage}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
-            {/* Header com indicador de sucesso */}
-            <View style={styles.successBadge}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
-              <Text style={styles.modalTitle}>
-                Página {capturedPages.length + 1} Processada
+            <View style={styles.fullPreviewTitleWrap}>
+              <Text style={styles.fullPreviewTitle}>
+                Página {capturedPages.length + 1} de {totalPagesCount}
               </Text>
+              <Text style={styles.fullPreviewSubtitle}>Revisão em Alta Definição</Text>
             </View>
 
-            {/* Pré-visualização da Imagem Tratada com Alta Fidelidade */}
-            <View style={styles.previewImageContainer}>
-              {processedResult?.processedUri ? (
-                <Image
-                  source={{ uri: processedResult.processedUri }}
-                  style={styles.previewImage}
-                />
-              ) : (
-                <View style={styles.placeholderPreview}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={styles.previewDocName}>Otimizando qualidade...</Text>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity
+              style={styles.fullPreviewDoneSmallButton}
+              onPress={handleFinishScan}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.fullPreviewDoneText}>Salvar</Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Faixa de Páginas Acumuladas da Sessão (Multi-page) */}
+          {/* Área Central Expandida da Imagem (Preenche a tela inteira) */}
+          <View style={styles.fullPreviewImageWrapper}>
+            {processedResult?.processedUri ? (
+              <Image
+                source={{ uri: processedResult.processedUri }}
+                style={styles.fullPreviewImage}
+              />
+            ) : (
+              <View style={styles.placeholderPreview}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.previewDocName}>Otimizando nitidez do documento...</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Faixa Inferior de Controles e Filtros */}
+          <View style={styles.fullPreviewBottomBar}>
+            {/* Faixa de Miniaturas (se houver múltiplas páginas) */}
             {capturedPages.length > 0 && (
-              <View style={{ width: '100%', marginBottom: spacing.small }}>
-                <Text style={styles.filterLabel}>
-                  Páginas Deste Documento ({totalPagesCount}):
-                </Text>
+              <View style={{ width: '100%', marginBottom: spacing.compact }}>
                 <PageStrip
                   pages={[
                     ...capturedPages.map((p, idx) => ({
@@ -294,107 +301,106 @@ export default function ScannerScreen() {
               </View>
             )}
 
-            {/* Seletor de Modos de Realce (Fase 3) */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Modo de Realce:</Text>
-              <View style={styles.filterPills}>
-                <TouchableOpacity
+            {/* Seletor de Filtros com Estilo Escuro */}
+            <View style={styles.filterPills}>
+              <TouchableOpacity
+                style={[
+                  styles.filterChipDark,
+                  filterMode === 'auto' && styles.filterChipDarkActive,
+                ]}
+                onPress={() => changeFilterMode('auto')}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={14}
+                  color={filterMode === 'auto' ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
                   style={[
-                    styles.filterChip,
-                    filterMode === 'auto' && styles.filterChipActive,
+                    styles.filterChipDarkText,
+                    filterMode === 'auto' && styles.filterChipDarkTextActive,
                   ]}
-                  onPress={() => changeFilterMode('auto')}
                 >
-                  <Ionicons
-                    name="sparkles"
-                    size={14}
-                    color={filterMode === 'auto' ? '#FFFFFF' : colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filterMode === 'auto' && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Automático
-                  </Text>
-                </TouchableOpacity>
+                  Automático
+                </Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
+              <TouchableOpacity
+                style={[
+                  styles.filterChipDark,
+                  filterMode === 'black_and_white' && styles.filterChipDarkActive,
+                ]}
+                onPress={() => changeFilterMode('black_and_white')}
+              >
+                <Ionicons
+                  name="contrast"
+                  size={14}
+                  color={filterMode === 'black_and_white' ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
                   style={[
-                    styles.filterChip,
-                    filterMode === 'black_and_white' && styles.filterChipActive,
+                    styles.filterChipDarkText,
+                    filterMode === 'black_and_white' && styles.filterChipDarkTextActive,
                   ]}
-                  onPress={() => changeFilterMode('black_and_white')}
                 >
-                  <Ionicons
-                    name="contrast"
-                    size={14}
-                    color={filterMode === 'black_and_white' ? '#FFFFFF' : colors.textPrimary}
-                  />
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filterMode === 'black_and_white' && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Preto e Branco
-                  </Text>
-                </TouchableOpacity>
+                  Preto e Branco
+                </Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
+              <TouchableOpacity
+                style={[
+                  styles.filterChipDark,
+                  filterMode === 'original' && styles.filterChipDarkActive,
+                ]}
+                onPress={() => changeFilterMode('original')}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={14}
+                  color={filterMode === 'original' ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
                   style={[
-                    styles.filterChip,
-                    filterMode === 'original' && styles.filterChipActive,
+                    styles.filterChipDarkText,
+                    filterMode === 'original' && styles.filterChipDarkTextActive,
                   ]}
-                  onPress={() => changeFilterMode('original')}
                 >
-                  <Ionicons
-                    name="image-outline"
-                    size={14}
-                    color={filterMode === 'original' ? '#FFFFFF' : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filterMode === 'original' && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Original
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  Original
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Ações de Conclusão, Adicionar Páginas ou Refazer */}
-            <View style={styles.modalActions}>
-              <View style={styles.modalActionsRow}>
-                <AppButton
-                  title="Refazer Foto"
-                  variant="tertiary"
-                  onPress={retakeCurrentPage}
-                  style={{ flex: 1 }}
-                  icon={<Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />}
-                />
-                <AppButton
-                  title="Mais Páginas"
-                  variant="secondary"
-                  onPress={addCurrentPageToDocument}
-                  style={{ flex: 1 }}
-                  icon={<Ionicons name="add" size={18} color={colors.primary} />}
-                />
-              </View>
+            {/* Ações Inferiores: Refazer, + Página, Concluir */}
+            <View style={styles.fullPreviewActionsRow}>
+              <TouchableOpacity
+                style={styles.fullPreviewActionButton}
+                onPress={retakeCurrentPage}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.fullPreviewActionText}>Refazer</Text>
+              </TouchableOpacity>
 
-              <AppButton
-                title="Concluir e Salvar Documento"
-                variant="primary"
+              <TouchableOpacity
+                style={styles.fullPreviewActionButton}
+                onPress={addCurrentPageToDocument}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={20} color="#FFFFFF" />
+                <Text style={styles.fullPreviewActionText}>+ Página</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.fullPreviewActionButton, styles.fullPreviewSaveButton]}
                 onPress={handleFinishScan}
-                style={styles.modalButton}
-                icon={<Ionicons name="checkmark-done" size={20} color="#FFFFFF" />}
-              />
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
+                <Text style={styles.fullPreviewSaveButtonText}>Concluir</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -546,43 +552,60 @@ const styles = StyleSheet.create({
   permissionButton: {
     width: '100%',
   },
-  modalBackdrop: {
+  fullPreviewContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'flex-end',
+    backgroundColor: '#090D16',
+    justifyContent: 'space-between',
   },
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.sheets,
-    borderTopRightRadius: radii.sheets,
-    padding: spacing.default,
-    paddingBottom: spacing.section,
-    alignItems: 'center',
-    maxHeight: '90%',
-  },
-  successBadge: {
+  fullPreviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.compact,
-    gap: spacing.small,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.default,
+    paddingVertical: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
-  modalTitle: {
-    ...typography.title3,
-    color: colors.textPrimary,
-  },
-  previewImageContainer: {
-    width: 200,
-    height: 250,
-    backgroundColor: colors.background,
-    borderRadius: radii.cards,
-    overflow: 'hidden',
-    marginBottom: spacing.compact,
+  fullPreviewBackButton: {
+    width: touchTarget.minSize,
+    height: touchTarget.minSize,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderRadius: touchTarget.minSize / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  previewImage: {
+  fullPreviewTitleWrap: {
+    alignItems: 'center',
+  },
+  fullPreviewTitle: {
+    ...typography.headline,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  fullPreviewSubtitle: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.65)',
+    marginTop: 2,
+  },
+  fullPreviewDoneSmallButton: {
+    paddingHorizontal: spacing.default,
+    paddingVertical: 8,
+    borderRadius: radii.capsule,
+    backgroundColor: colors.primary,
+  },
+  fullPreviewDoneText: {
+    ...typography.subheadline,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  fullPreviewImageWrapper: {
+    flex: 1,
+    width: '100%',
+    padding: spacing.compact,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullPreviewImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'contain',
@@ -594,70 +617,75 @@ const styles = StyleSheet.create({
   },
   previewDocName: {
     ...typography.footnote,
-    color: colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     marginTop: spacing.small,
   },
-  filterSection: {
-    width: '100%',
-    marginBottom: spacing.default,
-    alignItems: 'center',
-  },
-  filterLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.micro + 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  fullPreviewBottomBar: {
+    backgroundColor: '#0F172A',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: spacing.default,
+    paddingTop: spacing.compact,
+    paddingBottom: spacing.large,
   },
   filterPills: {
     flexDirection: 'row',
     gap: spacing.small,
     justifyContent: 'center',
+    marginBottom: spacing.default,
   },
-  filterChip: {
+  filterChipDark: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: spacing.micro + 2,
-    paddingHorizontal: spacing.compact,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.default,
     borderRadius: radii.capsule,
-    backgroundColor: '#F0F0F2',
-    minHeight: 34,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  filterChipActive: {
+  filterChipDarkActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  filterChipText: {
+  filterChipDarkText: {
     ...typography.caption,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#94A3B8',
   },
-  filterChipTextActive: {
+  filterChipDarkTextActive: {
     color: '#FFFFFF',
   },
-  modalActions: {
-    width: '100%',
-    gap: spacing.compact,
-  },
-  modalActionsRow: {
+  fullPreviewActionsRow: {
     flexDirection: 'row',
     gap: spacing.small,
-    width: '100%',
+    alignItems: 'center',
   },
-  modalCloseButton: {
-    position: 'absolute',
-    top: spacing.default,
-    right: spacing.default,
-    zIndex: 10,
-    width: touchTarget.minSize,
-    height: touchTarget.minSize,
+  fullPreviewActionButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F0F2',
-    borderRadius: touchTarget.minSize / 2,
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: radii.standard,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    minHeight: touchTarget.minSize,
   },
-  modalButton: {
-    width: '100%',
+  fullPreviewActionText: {
+    ...typography.subheadline,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  fullPreviewSaveButton: {
+    flex: 1.3,
+    backgroundColor: colors.primary,
+  },
+  fullPreviewSaveButtonText: {
+    ...typography.subheadline,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
