@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   Platform,
   useWindowDimensions,
   Alert,
+  TextInput,
+  PanResponder,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radii, typography, touchTarget } from '../../theme';
+import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
 import { AppButton, PageStrip, PaywallModal } from '../../components/ui';
 import { CaptureButton, ScannerOverlay, WebCameraView, CropEditorModal } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
@@ -33,6 +35,16 @@ export default function ScannerScreen() {
 
   const [isCropModalVisible, setIsCropModalVisible] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(1);
+  const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Modal para personalização do nome do documento ao salvar
+  const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState('');
+
+  // Refs para controle de gesto de pinça (Pinch-to-Zoom)
+  const lastTapRef = useRef<number>(0);
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialPinchScaleRef = useRef<number>(1);
 
   React.useEffect(() => {
     TelemetryService.track('scanner_opened');
@@ -118,8 +130,61 @@ export default function ScannerScreen() {
     await captureDocument();
   };
 
-  // Concluir e salvar o documento no repositório local com suporte a título sugerido por OCR
-  const handleFinishScan = async () => {
+  // Controle de Gesto de Pinça (Pinch to Zoom) e Pan tátil
+  const pinchPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        const now = Date.now();
+        if (touches.length === 1) {
+          if (now - lastTapRef.current < 300) {
+            // Double tap para alternar zoom 1x <-> 2.5x
+            setZoomScale((z) => {
+              const next = z === 1 ? 2.5 : 1;
+              if (next === 1) setPanPosition({ x: 0, y: 0 });
+              return next;
+            });
+          }
+          lastTapRef.current = now;
+        } else if (touches.length >= 2) {
+          const dist = Math.hypot(
+            touches[0].pageX - touches[1].pageX,
+            touches[0].pageY - touches[1].pageY
+          );
+          initialPinchDistRef.current = dist;
+          initialPinchScaleRef.current = zoomScale;
+        }
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2 && initialPinchDistRef.current) {
+          const dist = Math.hypot(
+            touches[0].pageX - touches[1].pageX,
+            touches[0].pageY - touches[1].pageY
+          );
+          const ratio = dist / initialPinchDistRef.current;
+          const newScale = Math.max(
+            1,
+            Math.min(4, parseFloat((initialPinchScaleRef.current * ratio).toFixed(2)))
+          );
+          setZoomScale(newScale);
+        } else if (touches.length === 1 && zoomScale > 1) {
+          setPanPosition((prev) => ({
+            x: Math.max(-150, Math.min(150, prev.x + gestureState.dx * 0.4)),
+            y: Math.max(-200, Math.min(200, prev.y + gestureState.dy * 0.4)),
+          }));
+        }
+      },
+      onPanResponderRelease: () => {
+        initialPinchDistRef.current = null;
+      },
+    })
+  ).current;
+
+  // Abrir diálogo de personalização do nome do documento/projeto ao salvar
+  const handleFinishScan = () => {
     // Validação de Limite do Plano Gratuito (Fase 9)
     if (!isPro && documents.length >= 5) {
       Alert.alert(
@@ -144,28 +209,48 @@ export default function ScannerScreen() {
     if (allPages.length > 0) {
       const now = new Date();
       const detectedTitle = allPages.find((p) => p.suggestedTitle)?.suggestedTitle;
-      const title =
+      const defaultTitle =
         detectedTitle ||
         `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-      const newDoc = await addDocument(
-        title,
-        allPages.map((page) => ({
-          originalPath: page.originalUri,
-          processedPath: page.processedUri,
-          thumbnailPath: page.thumbnailUri,
-          width: page.width,
-          height: page.height,
-          ocrText: page.ocrText,
-        }))
-      );
-
-      // Redireciona diretamente para os detalhes do documento recém-criado para revisão/PDF
-      router.replace(`/document/${newDoc.id}` as any);
+      setDocumentTitle(defaultTitle);
+      setIsSaveModalVisible(true);
       return;
     }
 
     router.replace('/');
+  };
+
+  // Efetivação do salvamento após confirmação do título
+  const executeSaveDocument = async () => {
+    const allPages = [...capturedPages];
+    if (processedResult) {
+      allPages.push(processedResult);
+    }
+
+    if (allPages.length === 0) return;
+
+    const now = new Date();
+    const finalTitle =
+      documentTitle.trim() ||
+      `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+    setIsSaveModalVisible(false);
+
+    const newDoc = await addDocument(
+      finalTitle,
+      allPages.map((page) => ({
+        originalPath: page.originalUri,
+        processedPath: page.processedUri,
+        thumbnailPath: page.thumbnailUri,
+        width: page.width,
+        height: page.height,
+        ocrText: page.ocrText,
+      }))
+    );
+
+    // Redireciona diretamente para a pasta do documento com as páginas
+    router.replace(`/document/${newDoc.id}` as any);
   };
 
   const totalPagesCount = capturedPages.length + (processedResult ? 1 : 0);
@@ -374,28 +459,33 @@ export default function ScannerScreen() {
             </View>
 
             {processedResult?.processedUri ? (
-              <ScrollView
-                style={{ width: '100%', height: '100%' }}
-                contentContainerStyle={{
-                  flexGrow: 1,
+              <View
+                {...pinchPanResponder.panHandlers}
+                style={{
+                  width: '100%',
+                  height: '100%',
                   alignItems: 'center',
                   justifyContent: 'center',
-                }}
-                maximumZoomScale={3}
-                minimumZoomScale={1}
-                showsHorizontalScrollIndicator={false}
-                showsVerticalScrollIndicator={false}
+                  overflow: 'hidden',
+                  touchAction: 'none',
+                  cursor: zoomScale > 1 ? 'grab' : 'default',
+                } as any}
               >
                 <Image
                   source={{ uri: processedResult.processedUri }}
                   style={[
                     styles.fullPreviewImage,
                     {
-                      transform: [{ scale: zoomScale }],
+                      transform: [
+                        { scale: zoomScale },
+                        { translateX: panPosition.x },
+                        { translateY: panPosition.y },
+                      ],
                     },
                   ]}
+                  resizeMode="contain"
                 />
-              </ScrollView>
+              </View>
             ) : (
               <View style={styles.placeholderPreview}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -601,6 +691,90 @@ export default function ScannerScreen() {
         visible={isPaywallVisible}
         onClose={closePaywall}
       />
+
+      {/* Modal para Nome Personalizado ao Salvar Documento / Projeto */}
+      <Modal
+        visible={isSaveModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsSaveModalVisible(false)}
+      >
+        <View style={styles.saveModalOverlay}>
+          <View style={[styles.saveModalCard, shadows.card]}>
+            <View style={styles.saveModalHeader}>
+              <View style={styles.saveModalIconWrap}>
+                <Ionicons name="folder-outline" size={24} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.saveModalTitle}>Salvar Documento</Text>
+                <Text style={styles.saveModalSubtitle}>Personalize o nome do projeto ou escolha uma categoria</Text>
+              </View>
+            </View>
+
+            {/* Input de Texto do Nome do Documento */}
+            <View style={styles.saveInputWrapper}>
+              <Ionicons name="document-text-outline" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.saveInput}
+                value={documentTitle}
+                onChangeText={setDocumentTitle}
+                placeholder="Ex: Nota Fiscal 123, Contrato..."
+                placeholderTextColor={colors.textSecondary}
+                autoFocus
+                selectTextOnFocus
+              />
+              {documentTitle.length > 0 && (
+                <TouchableOpacity onPress={() => setDocumentTitle('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Chips Rápidos de Categorias */}
+            <View style={styles.categoryChipsRow}>
+              {['Nota Fiscal', 'Contrato', 'Recibo', 'Identidade', 'Comprovante', 'Geral'].map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.categoryChip,
+                    documentTitle.toLowerCase().includes(cat.toLowerCase()) && styles.categoryChipActive,
+                  ]}
+                  onPress={() => {
+                    const today = new Date().toLocaleDateString('pt-BR');
+                    setDocumentTitle(`${cat} - ${today}`);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      documentTitle.toLowerCase().includes(cat.toLowerCase()) && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Botões de Ação */}
+            <View style={styles.saveModalActions}>
+              <AppButton
+                title="Cancelar"
+                variant="tertiary"
+                onPress={() => setIsSaveModalVisible(false)}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                title="Salvar Projeto"
+                variant="primary"
+                onPress={executeSaveDocument}
+                style={{ flex: 1.4 }}
+                icon={<Ionicons name="checkmark" size={18} color="#FFFFFF" />}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -978,5 +1152,92 @@ const styles = StyleSheet.create({
     ...typography.subheadline,
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  saveModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.default,
+  },
+  saveModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#0F172A',
+    borderRadius: radii.cards,
+    padding: spacing.large,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  saveModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    marginBottom: spacing.default,
+  },
+  saveModalIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.standard,
+    backgroundColor: 'rgba(0, 102, 204, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveModalTitle: {
+    ...typography.headline,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  saveModalSubtitle: {
+    ...typography.caption,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  saveInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: radii.standard,
+    paddingHorizontal: spacing.default,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    marginBottom: spacing.default,
+  },
+  saveInput: {
+    flex: 1,
+    ...typography.body,
+    color: '#FFFFFF',
+    paddingVertical: 6,
+  },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.compact,
+    marginBottom: spacing.large,
+  },
+  categoryChip: {
+    paddingHorizontal: spacing.compact,
+    paddingVertical: 6,
+    borderRadius: radii.capsule,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  categoryChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    ...typography.caption,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+  },
+  saveModalActions: {
+    flexDirection: 'row',
+    gap: spacing.small,
   },
 });

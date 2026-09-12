@@ -10,6 +10,7 @@ export type FunnelEventName =
   | 'successful_processing'
   | 'pdf_generated'
   | 'pdf_shared'
+  | 'image_shared'
   | 'second_scan'
   | 'paywall_viewed'
   | 'subscription_purchased';

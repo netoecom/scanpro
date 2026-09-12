@@ -64,6 +64,23 @@ export default function DocumentsScreen() {
     }
   };
 
+  const handleDeleteDocument = (id: string, title: string) => {
+    Alert.alert(
+      'Excluir Documento',
+      `Deseja realmente excluir permanentemente "${title}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteDocument(id);
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -240,16 +257,26 @@ export default function DocumentsScreen() {
                         <Ionicons name="document-text-outline" size={36} color={colors.textSecondary} />
                       </View>
                     )}
-                    <TouchableOpacity
-                      style={styles.gridFavoriteBtn}
-                      onPress={() => toggleFavorite(doc.id)}
-                    >
-                      <Ionicons
-                        name={doc.isFavorite ? 'star' : 'star-outline'}
-                        size={16}
-                        color={doc.isFavorite ? colors.warning : 'rgba(0, 0, 0, 0.4)'}
-                      />
-                    </TouchableOpacity>
+                    <View style={styles.gridActionOverlay}>
+                      <TouchableOpacity
+                        style={styles.gridActionBtn}
+                        onPress={() => toggleFavorite(doc.id)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Ionicons
+                          name={doc.isFavorite ? 'star' : 'star-outline'}
+                          size={15}
+                          color={doc.isFavorite ? colors.warning : '#64748B'}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.gridActionBtn}
+                        onPress={() => handleDeleteDocument(doc.id, doc.title)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.gridMeta}>
                     <Text style={styles.gridTitle} numberOfLines={1}>
@@ -269,6 +296,7 @@ export default function DocumentsScreen() {
                 document={doc}
                 onPress={() => router.push(`/document/${doc.id}` as any)}
                 onToggleFavorite={() => toggleFavorite(doc.id)}
+                onDelete={() => handleDeleteDocument(doc.id, doc.title)}
               />
             ))
           )}
@@ -473,14 +501,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gridFavoriteBtn: {
+  gridActionOverlay: {
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderRadius: radii.capsule,
-    padding: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     ...shadows.subtle,
+  },
+  gridActionBtn: {
+    padding: 5,
+    borderRadius: radii.capsule,
   },
   gridMeta: {
     padding: spacing.small,

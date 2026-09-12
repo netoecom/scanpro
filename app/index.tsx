@@ -18,7 +18,7 @@ import { TelemetryService } from '../services/telemetry';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { documents, loadDocuments, toggleFavorite } = useDocumentStore();
+  const { documents, loadDocuments, toggleFavorite, deleteDocument } = useDocumentStore();
   const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { isInstalled } = usePwaInstall();
 
@@ -44,6 +44,23 @@ export default function HomeScreen() {
 
   const handleDocumentPress = (id: string) => {
     router.push(`/document/${id}` as any);
+  };
+
+  const handleDeleteDocument = (id: string, title: string) => {
+    Alert.alert(
+      'Excluir Documento',
+      `Deseja realmente excluir permanentemente "${title}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteDocument(id);
+          },
+        },
+      ]
+    );
   };
 
   const getGreeting = () => {
@@ -168,6 +185,7 @@ export default function HomeScreen() {
                   document={doc}
                   onPress={() => handleDocumentPress(doc.id)}
                   onToggleFavorite={() => toggleFavorite(doc.id)}
+                  onDelete={() => handleDeleteDocument(doc.id, doc.title)}
                 />
               ))}
             </View>

@@ -189,4 +189,67 @@ export class PdfService {
       }
     }
   }
+
+  /**
+   * Compartilha uma imagem individual na resolução nativa original sem perda
+   */
+  static async shareImage(imageUri: string, title = 'ScanPro Imagem', pageIndex = 1): Promise<void> {
+    TelemetryService.track('image_shared', { title, pageIndex });
+    const cleanTitle = title.replace(/[^\w\s-]/gi, '').trim().replace(/\s+/g, '_') || 'documento';
+    const filename = `${cleanTitle}_pagina_${pageIndex}.jpg`;
+
+    if (Platform.OS === 'web') {
+      try {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+          const file = new File([blob], filename, { type: 'image/jpeg' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title });
+            return;
+          }
+        }
+        // Download direto
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } catch {
+        const a = document.createElement('a');
+        a.href = imageUri;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } else {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(imageUri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: `Compartilhar Página ${pageIndex}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Compartilha múltiplas imagens em alta definição sequencialmente
+   */
+  static async shareImages(
+    images: Array<{ uri: string; pageIndex: number }>,
+    title = 'ScanPro Imagens'
+  ): Promise<void> {
+    for (const img of images) {
+      await this.shareImage(img.uri, title, img.pageIndex);
+      // Pequeno intervalo entre downloads múltiplos no navegador
+      if (Platform.OS === 'web') {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+  }
 }

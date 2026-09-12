@@ -8,6 +8,7 @@ interface PageThumbnailProps {
   uri: string;
   isSelected?: boolean;
   onPress: () => void;
+  onToggleSelect?: () => void;
   onDelete?: () => void;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
@@ -20,6 +21,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
   uri,
   isSelected = false,
   onPress,
+  onToggleSelect,
   onDelete,
   onMoveLeft,
   onMoveRight,
@@ -46,6 +48,17 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
           </View>
         )}
 
+        {/* Checkbox de Seleção para Compartilhamento */}
+        {onToggleSelect && (
+          <TouchableOpacity
+            style={[styles.selectCheckbox, isSelected && styles.selectCheckboxActive]}
+            onPress={onToggleSelect}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {isSelected && <Ionicons name="checkmark" size={11} color="#FFFFFF" />}
+          </TouchableOpacity>
+        )}
+
         {/* Badge Numérico da Página */}
         <View style={styles.pageBadge}>
           <Text style={styles.pageBadgeText}>{pageIndex + 1}</Text>
@@ -58,7 +71,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={onDelete}
           >
-            <Ionicons name="close" size={12} color="#FFFFFF" />
+            <Ionicons name="trash-outline" size={11} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </TouchableOpacity>
@@ -142,16 +155,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  selectCheckbox: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  selectCheckboxActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
   deleteButton: {
     position: 'absolute',
     top: 4,
     right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.error,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 5,
   },
   reorderBar: {
     flexDirection: 'row',

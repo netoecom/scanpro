@@ -38,9 +38,17 @@ export default function DocumentDetailScreen() {
 
   const [previewPageIndex, setPreviewPageIndex] = useState<number | null>(null);
   const [showOcrText, setShowOcrText] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+  const [previewPan, setPreviewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isSharingImages, setIsSharingImages] = useState(false);
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
+
+  // Seleção de páginas específicas para compartilhar
+  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
 
   const document = documents.find((doc) => doc.id === id);
 
@@ -52,6 +60,22 @@ export default function DocumentDetailScreen() {
       loadDocuments();
     }
   }, [id, loadDocumentPages, loadDocuments, documents.length]);
+
+  // Sincroniza páginas selecionadas inicialmente com todas do documento
+  useEffect(() => {
+    if (currentPages.length > 0) {
+      setSelectedPageIds((prev) => {
+        if (prev.size === 0) {
+          return new Set(currentPages.map((p) => p.id));
+        }
+        const next = new Set<string>();
+        currentPages.forEach((p) => {
+          if (prev.has(p.id)) next.add(p.id);
+        });
+        return next.size > 0 ? next : new Set(currentPages.map((p) => p.id));
+      });
+    }
+  }, [currentPages]);
 
   if (!document) {
     return (
@@ -68,6 +92,27 @@ export default function DocumentDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  // Alternar seleção de página individual
+  const togglePageSelection = (pageId: string) => {
+    setSelectedPageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllPages = () => {
+    setSelectedPageIds(new Set(currentPages.map((p) => p.id)));
+  };
+
+  const deselectAllPages = () => {
+    setSelectedPageIds(new Set());
+  };
 
   const handleMove = async (fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= currentPages.length || !id) return;
@@ -121,20 +166,32 @@ export default function DocumentDetailScreen() {
     );
   };
 
-  const handleExportPdf = async () => {
+  const handleShareClick = () => {
     if (currentPages.length === 0) {
-      Alert.alert('Aviso', 'O documento não possui páginas para exportar.');
+      Alert.alert('Aviso', 'O documento não possui páginas para compartilhar.');
       return;
     }
+    if (selectedPageIds.size === 0) {
+      Alert.alert('Nenhuma Página Selecionada', 'Por favor, selecione ao menos 1 página para compartilhar.');
+      return;
+    }
+    setIsShareModalVisible(true);
+  };
 
-    try {
-      setIsGeneratingPdf(true);
-      const pagesToExport = currentPages.map((p) => ({
+  const handleSharePdf = async () => {
+    setIsShareModalVisible(false);
+    const pagesToExport = currentPages
+      .filter((p) => selectedPageIds.has(p.id))
+      .map((p) => ({
         uri: p.processedPath || p.originalPath,
         width: p.width,
         height: p.height,
       }));
 
+    if (pagesToExport.length === 0) return;
+
+    try {
+      setIsGeneratingPdf(true);
       const result = await PdfService.generatePdf({
         title: document.title,
         pages: pagesToExport,
@@ -146,10 +203,32 @@ export default function DocumentDetailScreen() {
 
       await PdfService.sharePdf(result.uri, document.title);
     } catch (err) {
-      console.error('Erro na exportação de PDF:', err);
+      console.error('Erro no compartilhamento de PDF:', err);
       Alert.alert('Erro', 'Não foi possível gerar o arquivo PDF.');
     } finally {
       setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleShareImages = async () => {
+    setIsShareModalVisible(false);
+    const pagesToExport = currentPages
+      .filter((p) => selectedPageIds.has(p.id))
+      .map((p, idx) => ({
+        uri: p.processedPath || p.originalPath,
+        pageIndex: idx + 1,
+      }));
+
+    if (pagesToExport.length === 0) return;
+
+    try {
+      setIsSharingImages(true);
+      await PdfService.shareImages(pagesToExport, document.title);
+    } catch (err) {
+      console.error('Erro no compartilhamento de imagens:', err);
+      Alert.alert('Erro', 'Não foi possível compartilhar as imagens.');
+    } finally {
+      setIsSharingImages(false);
     }
   };
 
@@ -220,22 +299,49 @@ export default function DocumentDetailScreen() {
             icon={<Ionicons name="add" size={18} color={colors.primary} />}
           />
           <AppButton
-            title={isGeneratingPdf ? 'Gerando PDF...' : 'Exportar PDF'}
+            title={
+              isGeneratingPdf
+                ? 'Gerando PDF...'
+                : isSharingImages
+                ? 'Exportando Fotos...'
+                : `Compartilhar${currentPages.length > 1 ? ` (${selectedPageIds.size})` : ''}`
+            }
             variant="primary"
-            onPress={handleExportPdf}
-            loading={isGeneratingPdf}
-            disabled={isGeneratingPdf}
+            onPress={handleShareClick}
+            loading={isGeneratingPdf || isSharingImages}
+            disabled={isGeneratingPdf || isSharingImages}
             style={styles.actionBtn}
-            icon={<Ionicons name="document-text-outline" size={18} color="#FFFFFF" />}
+            icon={<Ionicons name="share-social-outline" size={18} color="#FFFFFF" />}
           />
         </View>
+
+        {/* Barra de Seleção Rápida de Páginas (quando houver mais de 1 página) */}
+        {currentPages.length > 1 && (
+          <View style={styles.selectionBar}>
+            <View style={styles.selectionInfo}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={colors.primary} />
+              <Text style={styles.selectionCountText}>
+                {selectedPageIds.size} de {currentPages.length} páginas selecionadas
+              </Text>
+            </View>
+            <View style={styles.selectionActions}>
+              <TouchableOpacity onPress={selectAllPages} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.selectionActionText}>Todas</Text>
+              </TouchableOpacity>
+              <Text style={styles.selectionDivider}>•</Text>
+              <TouchableOpacity onPress={deselectAllPages} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.selectionActionText}>Nenhuma</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Instrução de Reordenação */}
         {currentPages.length > 1 && (
           <View style={styles.hintContainer}>
             <Ionicons name="swap-horizontal" size={16} color={colors.textSecondary} />
             <Text style={styles.hintText}>
-              Use as setas abaixo de cada miniatura para reorganizar a ordem das páginas.
+              Toque no círculo para selecionar as páginas que deseja compartilhar. Use as setas para reorganizar.
             </Text>
           </View>
         )}
@@ -247,9 +353,13 @@ export default function DocumentDetailScreen() {
               <PageThumbnail
                 pageIndex={index}
                 uri={page.processedPath || page.originalPath}
+                isSelected={selectedPageIds.has(page.id)}
+                onToggleSelect={() => togglePageSelection(page.id)}
                 onPress={() => {
                   setPreviewPageIndex(index);
                   setShowOcrText(false);
+                  setPreviewZoom(1);
+                  setPreviewPan({ x: 0, y: 0 });
                 }}
                 onDelete={() => handleDeletePage(page, index)}
                 onMoveLeft={() => handleMove(index, index - 1)}
@@ -268,7 +378,7 @@ export default function DocumentDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Modal de Pré-Visualização com Imagem ou Texto OCR */}
+      {/* Modal de Pré-Visualização com Imagem, Zoom e OCR */}
       <Modal
         visible={previewPageIndex !== null}
         transparent={true}
@@ -295,7 +405,7 @@ export default function DocumentDetailScreen() {
                   <Ionicons
                     name={showOcrText ? 'image' : 'text'}
                     size={16}
-                    color={showOcrText ? '#FFFFFF' : '#FFFFFF'}
+                    color="#FFFFFF"
                   />
                   <Text style={styles.toggleOcrText}>
                     {showOcrText ? 'Ver Imagem' : 'Ver Texto'}
@@ -311,6 +421,32 @@ export default function DocumentDetailScreen() {
             </View>
           </SafeAreaView>
 
+          {/* Barra Flutuante de Zoom para Inspecionar a Imagem */}
+          {!showOcrText && (
+            <View style={styles.previewZoomBar}>
+              <TouchableOpacity
+                style={styles.previewZoomBtn}
+                onPress={() => setPreviewZoom((z) => Math.max(1, parseFloat((z - 0.5).toFixed(1))))}
+                disabled={previewZoom <= 1}
+              >
+                <Ionicons name="remove" size={16} color={previewZoom <= 1 ? '#64748B' : '#FFFFFF'} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.previewZoomBadge}
+                onPress={() => setPreviewZoom((z) => (z === 1 ? 2.5 : 1))}
+              >
+                <Text style={styles.previewZoomBadgeText}>{Math.round(previewZoom * 100)}%</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.previewZoomBtn}
+                onPress={() => setPreviewZoom((z) => Math.min(3.5, parseFloat((z + 0.5).toFixed(1))))}
+                disabled={previewZoom >= 3.5}
+              >
+                <Ionicons name="add" size={16} color={previewZoom >= 3.5 ? '#64748B' : '#FFFFFF'} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.previewModalBody}>
             {activePreviewPage && (
               showOcrText ? (
@@ -320,14 +456,96 @@ export default function DocumentDetailScreen() {
                   </Text>
                 </ScrollView>
               ) : (
-                <Image
-                  source={{
-                    uri: activePreviewPage.processedPath || activePreviewPage.originalPath,
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => {
+                    // Alterna zoom com toque duplo simples
+                    setPreviewZoom((z) => (z === 1 ? 2.2 : 1));
                   }}
-                  style={styles.fullPreviewImage}
-                />
+                  style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Image
+                    source={{
+                      uri: activePreviewPage.processedPath || activePreviewPage.originalPath,
+                    }}
+                    style={[
+                      styles.fullPreviewImage,
+                      {
+                        transform: [{ scale: previewZoom }],
+                      },
+                    ]}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
               )
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Escolha de Formato de Compartilhamento (PDF ou Imagens) */}
+      <Modal
+        visible={isShareModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsShareModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.shareCard, shadows.card]}>
+            <View style={styles.shareCardHeader}>
+              <View style={styles.shareIconWrap}>
+                <Ionicons name="share-social-outline" size={24} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.shareCardTitle}>Compartilhar</Text>
+                <Text style={styles.shareCardSubtitle}>
+                  {selectedPageIds.size} {selectedPageIds.size === 1 ? 'página selecionada' : 'páginas selecionadas'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Opção 1: Compartilhar como PDF */}
+            <TouchableOpacity
+              style={styles.shareOptionCard}
+              onPress={handleSharePdf}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.shareOptionIconWrap, { backgroundColor: 'rgba(0, 102, 204, 0.12)' }]}>
+                <Ionicons name="document-text" size={26} color={colors.primary} />
+              </View>
+              <View style={styles.shareOptionMeta}>
+                <Text style={styles.shareOptionTitle}>Compartilhar como PDF</Text>
+                <Text style={styles.shareOptionDesc}>
+                  Compilar {selectedPageIds.size} {selectedPageIds.size === 1 ? 'página' : 'páginas'} em documento A4
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Opção 2: Compartilhar como Imagens de Alta Resolução */}
+            <TouchableOpacity
+              style={styles.shareOptionCard}
+              onPress={handleShareImages}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.shareOptionIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <Ionicons name="images" size={26} color="#10B981" />
+              </View>
+              <View style={styles.shareOptionMeta}>
+                <Text style={styles.shareOptionTitle}>Compartilhar como Imagem</Text>
+                <Text style={styles.shareOptionDesc}>
+                  Exportar {selectedPageIds.size} {selectedPageIds.size === 1 ? 'foto' : 'fotos'} em resolução original sem perda
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            <AppButton
+              title="Cancelar"
+              variant="tertiary"
+              onPress={() => setIsShareModalVisible(false)}
+              style={{ marginTop: spacing.small }}
+            />
           </View>
         </View>
       </Modal>
@@ -571,5 +789,130 @@ const styles = StyleSheet.create({
   renameActions: {
     flexDirection: 'row',
     gap: spacing.small,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: spacing.default,
+    paddingVertical: spacing.small,
+    borderRadius: radii.standard,
+    marginBottom: spacing.small,
+  },
+  selectionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  selectionCountText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+  },
+  selectionActionText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  selectionDivider: {
+    color: colors.separator,
+  },
+  previewZoomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.small,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  previewZoomBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewZoomBadge: {
+    paddingHorizontal: spacing.compact,
+    paddingVertical: 4,
+    borderRadius: radii.capsule,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  previewZoomBadgeText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  shareCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.cards,
+    padding: spacing.default,
+  },
+  shareCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    marginBottom: spacing.default,
+    paddingBottom: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  shareIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.standard,
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareCardTitle: {
+    ...typography.headline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  shareCardSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  shareOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.default,
+    borderRadius: radii.standard,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: spacing.small,
+  },
+  shareOptionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.standard,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.default,
+  },
+  shareOptionMeta: {
+    flex: 1,
+  },
+  shareOptionTitle: {
+    ...typography.subheadline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  shareOptionDesc: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
