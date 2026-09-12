@@ -3,8 +3,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
-import { ScannerStatus, DocumentDetection, ScanFilterMode } from '../../types';
-import { ProcessingPipeline, ProcessedPageResult } from '../../services/processing';
+import { ScannerStatus, DocumentDetection, ScanFilterMode, CornerPoints } from '../../types';
+import { ProcessingPipeline, ProcessedPageResult, EdgeDetector } from '../../services/processing';
 import { OcrService } from '../../services/ocr/ocrService';
 import { WebCameraViewRef } from '../../components/scanner/WebCameraView';
 import { TelemetryService } from '../../services/telemetry';
@@ -26,6 +26,7 @@ export function useScannerEngine() {
   const [rawCapturedUri, setRawCapturedUri] = useState<string | null>(null);
   const [processedResult, setProcessedResult] = useState<ProcessedPageResult | null>(null);
   const [capturedPages, setCapturedPages] = useState<ProcessedPageResult[]>([]);
+  const [activeCorners, setActiveCorners] = useState<CornerPoints | null>(null);
 
   const cameraRef = useRef<CameraView | null>(null);
   const webCameraRef = useRef<WebCameraViewRef | null>(null);
@@ -151,13 +152,20 @@ export function useScannerEngine() {
 
   // Executa o processamento real da imagem através da esteira de processamento e OCR
   const processCapturedImage = useCallback(
-    async (imageUri: string, mode: ScanFilterMode = filterMode) => {
+    async (
+      imageUri: string,
+      mode: ScanFilterMode = filterMode,
+      cornersOverride?: CornerPoints | null
+    ) => {
       setStatus('PROCESSING');
       try {
+        const cornersToUse = cornersOverride !== undefined ? cornersOverride : activeCorners;
+
         const [result, ocrResult] = await Promise.all([
           ProcessingPipeline.processPage({
             imageUri,
             filterMode: mode,
+            corners: cornersToUse,
           }),
           OcrService.recognizeText(imageUri).catch((err) => {
             console.warn('Falha silenciosa do OCR:', err);
@@ -189,13 +197,14 @@ export function useScannerEngine() {
           width: 1200,
           height: 1600,
           filterMode: mode,
+          detectedCorners: cornersOverride ?? activeCorners,
         };
         setProcessedResult(fallbackResult);
         setStatus('CAPTURE_SUCCESS');
         return fallbackResult;
       }
     },
-    [filterMode, triggerHaptic]
+    [filterMode, activeCorners, triggerHaptic]
   );
 
   // Captura manual ou disparada pelo motor
@@ -223,11 +232,36 @@ export function useScannerEngine() {
 
       // Se executando em ambiente de teste sem câmera física disponível:
       if (!photoUri) {
-        photoUri = `mock-captured-${Date.now()}.jpg`;
+        if (Platform.OS === 'web' && typeof document !== 'undefined') {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1200;
+          canvas.height = 1600;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#CBD5E1';
+            ctx.fillRect(0, 0, 1200, 1600);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(100, 140, 1000, 1320);
+            ctx.fillStyle = '#1E293B';
+            ctx.font = 'bold 42px sans-serif';
+            ctx.fillText('ScanPro — Documento Digitalizado', 180, 260);
+            ctx.fillStyle = '#64748B';
+            ctx.font = '26px sans-serif';
+            ctx.fillText('Página capturada com alta definição e correção inteligente.', 180, 320);
+          }
+          photoUri = canvas.toDataURL('image/jpeg', 0.95);
+        } else {
+          photoUri = `mock-captured-${Date.now()}.jpg`;
+        }
       }
 
       setRawCapturedUri(photoUri);
-      await processCapturedImage(photoUri, filterMode);
+
+      // Leitura inteligente automática das bordas do documento
+      const detection = await EdgeDetector.detectDocumentCorners(photoUri);
+      setActiveCorners(detection.corners);
+
+      await processCapturedImage(photoUri, filterMode, detection.corners);
 
       return photoUri;
     } catch (err) {
@@ -252,15 +286,26 @@ export function useScannerEngine() {
     };
   }, [autoCapture, status, captureDocument]);
 
-  // Alterar modo de filtro dinamicamente na tela de preview (Auto, P&B, Original)
+  // Alterar modo de filtro dinamicamente na tela de preview (Auto, P&B, Cinza, Cores Vivas, Original)
   const changeFilterMode = useCallback(
     async (newMode: ScanFilterMode) => {
       setFilterMode(newMode);
       if (rawCapturedUri) {
-        await processCapturedImage(rawCapturedUri, newMode);
+        await processCapturedImage(rawCapturedUri, newMode, activeCorners);
       }
     },
-    [rawCapturedUri, processCapturedImage]
+    [rawCapturedUri, activeCorners, processCapturedImage]
+  );
+
+  // Aplica novo recorte manual vindo do editor de cantos
+  const applyCustomCrop = useCallback(
+    async (newCorners: CornerPoints) => {
+      setActiveCorners(newCorners);
+      if (rawCapturedUri) {
+        await processCapturedImage(rawCapturedUri, filterMode, newCorners);
+      }
+    },
+    [rawCapturedUri, filterMode, processCapturedImage]
   );
 
   // Importar imagem da galeria
@@ -275,7 +320,11 @@ export function useScannerEngine() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setRawCapturedUri(uri);
-        await processCapturedImage(uri, filterMode);
+
+        const detection = await EdgeDetector.detectDocumentCorners(uri);
+        setActiveCorners(detection.corners);
+
+        await processCapturedImage(uri, filterMode, detection.corners);
         return uri;
       }
       return null;
@@ -349,5 +398,7 @@ export function useScannerEngine() {
     handleMountError,
     retakeCurrentPage,
     resetScanner,
+    activeCorners,
+    applyCustomCrop,
   };
 }

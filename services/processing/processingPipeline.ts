@@ -26,6 +26,7 @@ export class ProcessingPipeline {
       width: cropped.width,
       height: cropped.height,
       filterMode,
+      detectedCorners: cropped.corners,
     };
   }
 }

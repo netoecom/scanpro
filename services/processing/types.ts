@@ -15,6 +15,7 @@ export interface ProcessedPageResult {
   width: number;
   height: number;
   filterMode: ScanFilterMode;
+  detectedCorners?: CornerPoints | null;
   ocrText?: string;
   suggestedTitle?: string;
 }

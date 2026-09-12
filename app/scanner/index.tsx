@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  ScrollView,
   ActivityIndicator,
   Platform,
   useWindowDimensions,
@@ -17,7 +18,7 @@ import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget } from '../../theme';
 import { AppButton, PageStrip, PaywallModal } from '../../components/ui';
-import { CaptureButton, ScannerOverlay, WebCameraView } from '../../components/scanner';
+import { CaptureButton, ScannerOverlay, WebCameraView, CropEditorModal } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore, usePremiumStore } from '../../store';
 import { TelemetryService } from '../../services/telemetry';
@@ -29,6 +30,9 @@ export default function ScannerScreen() {
   const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const previewImageHeight = Math.max(300, windowHeight - 210);
+
+  const [isCropModalVisible, setIsCropModalVisible] = useState(false);
+  const [zoomScale, setZoomScale] = useState<number>(1);
 
   React.useEffect(() => {
     TelemetryService.track('scanner_opened');
@@ -47,12 +51,15 @@ export default function ScannerScreen() {
     cameraError,
     autoCapture,
     filterMode,
+    rawCapturedUri,
     processedResult,
     capturedPages,
     confidence,
+    activeCorners,
     captureDocument,
     pickFromGallery,
     changeFilterMode,
+    applyCustomCrop,
     addCurrentPageToDocument,
     toggleFlash,
     toggleFacing,
@@ -289,7 +296,10 @@ export default function ScannerScreen() {
           <View style={styles.fullPreviewHeader}>
             <TouchableOpacity
               style={styles.fullPreviewBackButton}
-              onPress={retakeCurrentPage}
+              onPress={() => {
+                setZoomScale(1);
+                retakeCurrentPage();
+              }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -302,22 +312,90 @@ export default function ScannerScreen() {
               <Text style={styles.fullPreviewSubtitle}>Revisão em Alta Definição</Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.fullPreviewDoneSmallButton}
-              onPress={handleFinishScan}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.fullPreviewDoneText}>Salvar</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.small }}>
+              {/* Botão de Ajustar Recorte e Bordas */}
+              <TouchableOpacity
+                style={styles.fullPreviewCropButton}
+                onPress={() => setIsCropModalVisible(true)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="crop" size={16} color="#FFFFFF" />
+                <Text style={styles.fullPreviewCropText}>Recortar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.fullPreviewDoneSmallButton}
+                onPress={() => {
+                  setZoomScale(1);
+                  handleFinishScan();
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.fullPreviewDoneText}>Salvar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Área Central Expandida da Imagem (Preenche a tela inteira com altura dinâmica) */}
+          {/* Área Central Expandida da Imagem com Zoom e Pan */}
           <View style={[styles.fullPreviewImageWrapper, { height: previewImageHeight }]}>
+            {/* Controles Flutuantes de Zoom */}
+            <View style={styles.zoomControlBar}>
+              <TouchableOpacity
+                style={styles.zoomBtn}
+                onPress={() => setZoomScale((z) => Math.max(1, parseFloat((z - 0.5).toFixed(1))))}
+                disabled={zoomScale <= 1}
+              >
+                <Ionicons name="remove" size={16} color={zoomScale <= 1 ? '#64748B' : '#FFFFFF'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.zoomLevelBadge}
+                onPress={() => setZoomScale((z) => (z === 1 ? 2 : 1))}
+              >
+                <Text style={styles.zoomLevelText}>{Math.round(zoomScale * 100)}%</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.zoomBtn}
+                onPress={() => setZoomScale((z) => Math.min(3, parseFloat((z + 0.5).toFixed(1))))}
+                disabled={zoomScale >= 3}
+              >
+                <Ionicons name="add" size={16} color={zoomScale >= 3 ? '#64748B' : '#FFFFFF'} />
+              </TouchableOpacity>
+
+              {zoomScale > 1 && (
+                <TouchableOpacity
+                  style={styles.zoomResetBtn}
+                  onPress={() => setZoomScale(1)}
+                >
+                  <Text style={styles.zoomResetText}>1x</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {processedResult?.processedUri ? (
-              <Image
-                source={{ uri: processedResult.processedUri }}
-                style={styles.fullPreviewImage}
-              />
+              <ScrollView
+                style={{ width: '100%', height: '100%' }}
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                maximumZoomScale={3}
+                minimumZoomScale={1}
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+              >
+                <Image
+                  source={{ uri: processedResult.processedUri }}
+                  style={[
+                    styles.fullPreviewImage,
+                    {
+                      transform: [{ scale: zoomScale }],
+                    },
+                  ]}
+                />
+              </ScrollView>
             ) : (
               <View style={styles.placeholderPreview}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -347,8 +425,12 @@ export default function ScannerScreen() {
               </View>
             )}
 
-            {/* Seletor de Filtros com Estilo Escuro */}
-            <View style={styles.filterPills}>
+            {/* 5 Presets de Filtros com Rolagem Horizontal Suave */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsScroll}
+            >
               <TouchableOpacity
                 style={[
                   styles.filterChipDark,
@@ -367,7 +449,7 @@ export default function ScannerScreen() {
                     filterMode === 'auto' && styles.filterChipDarkTextActive,
                   ]}
                 >
-                  Automático
+                  Mágico (Auto)
                 </Text>
               </TouchableOpacity>
 
@@ -389,7 +471,51 @@ export default function ScannerScreen() {
                     filterMode === 'black_and_white' && styles.filterChipDarkTextActive,
                   ]}
                 >
-                  Preto e Branco
+                  P&B Nítido
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterChipDark,
+                  filterMode === 'grayscale' && styles.filterChipDarkActive,
+                ]}
+                onPress={() => changeFilterMode('grayscale')}
+              >
+                <Ionicons
+                  name="color-filter-outline"
+                  size={14}
+                  color={filterMode === 'grayscale' ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.filterChipDarkText,
+                    filterMode === 'grayscale' && styles.filterChipDarkTextActive,
+                  ]}
+                >
+                  Escala de Cinza
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterChipDark,
+                  filterMode === 'color_boost' && styles.filterChipDarkActive,
+                ]}
+                onPress={() => changeFilterMode('color_boost')}
+              >
+                <Ionicons
+                  name="color-palette-outline"
+                  size={14}
+                  color={filterMode === 'color_boost' ? '#FFFFFF' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.filterChipDarkText,
+                    filterMode === 'color_boost' && styles.filterChipDarkTextActive,
+                  ]}
+                >
+                  Cores Vivas
                 </Text>
               </TouchableOpacity>
 
@@ -414,13 +540,16 @@ export default function ScannerScreen() {
                   Original
                 </Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* Ações Inferiores: Refazer, + Página, Concluir */}
             <View style={styles.fullPreviewActionsRow}>
               <TouchableOpacity
                 style={styles.fullPreviewActionButton}
-                onPress={retakeCurrentPage}
+                onPress={() => {
+                  setZoomScale(1);
+                  retakeCurrentPage();
+                }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
@@ -429,7 +558,10 @@ export default function ScannerScreen() {
 
               <TouchableOpacity
                 style={styles.fullPreviewActionButton}
-                onPress={addCurrentPageToDocument}
+                onPress={() => {
+                  setZoomScale(1);
+                  addCurrentPageToDocument();
+                }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="add" size={20} color="#FFFFFF" />
@@ -438,7 +570,10 @@ export default function ScannerScreen() {
 
               <TouchableOpacity
                 style={[styles.fullPreviewActionButton, styles.fullPreviewSaveButton]}
-                onPress={handleFinishScan}
+                onPress={() => {
+                  setZoomScale(1);
+                  handleFinishScan();
+                }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
@@ -448,6 +583,18 @@ export default function ScannerScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Modal Interativo de Recorte e Ajuste Fino dos Cantos */}
+      <CropEditorModal
+        visible={isCropModalVisible}
+        imageUri={rawCapturedUri}
+        initialCorners={processedResult?.detectedCorners || activeCorners}
+        onApplyCrop={async (newCorners) => {
+          setIsCropModalVisible(false);
+          await applyCustomCrop(newCorners);
+        }}
+        onCancel={() => setIsCropModalVisible(false)}
+      />
 
       {/* Modal de Assinatura Pro (Fase 9) */}
       <PaywallModal
@@ -674,12 +821,74 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+  fullPreviewCropButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.compact,
+    paddingVertical: 7,
+    borderRadius: radii.capsule,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  fullPreviewCropText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  zoomControlBar: {
+    position: 'absolute',
+    top: spacing.compact,
+    right: spacing.compact,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.capsule,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    zIndex: 25,
+  },
+  zoomBtn: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  zoomLevelBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  zoomLevelText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  zoomResetBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.capsule,
+    backgroundColor: colors.primary,
+  },
+  zoomResetText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 10,
+  },
   fullPreviewImageWrapper: {
     flex: 1,
     width: '100%',
     padding: spacing.compact,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   fullPreviewImage: {
     width: '100%',
@@ -709,6 +918,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.small,
     justifyContent: 'center',
+    marginBottom: spacing.default,
+  },
+  filterPillsScroll: {
+    flexDirection: 'row',
+    gap: spacing.small,
+    paddingHorizontal: spacing.small,
     marginBottom: spacing.default,
   },
   filterChipDark: {

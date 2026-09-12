@@ -30,7 +30,7 @@ export type ScannerStatus =
   | 'CAPTURE_SUCCESS'
   | 'CAPTURE_ERROR';
 
-export type ScanFilterMode = 'auto' | 'original' | 'black_and_white';
+export type ScanFilterMode = 'auto' | 'original' | 'black_and_white' | 'grayscale' | 'color_boost';
 
 export interface ScannerSettings {
   autoCapture: boolean;
