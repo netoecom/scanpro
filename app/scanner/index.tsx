@@ -276,11 +276,12 @@ export default function ScannerScreen() {
         />
       )}
 
-      {/* Camada de Overlay e Detecção Visual */}
+      {/* Camada de Overlay e Detecção Visual com Efeito Laser Transitório */}
       <ScannerOverlay
         status={status}
         confidence={confidence}
         autoCapture={autoCapture}
+        capturedImageUri={rawCapturedUri}
       />
 
       <SafeAreaView style={styles.controlsSafeArea} pointerEvents="box-none">
