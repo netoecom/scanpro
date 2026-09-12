@@ -1,6 +1,6 @@
 /**
  * ScanPro — PWA Install & Permissions Hook
- * Permite instalar o aplicativo com 1 clique e solicitar permissões de forma amigável no Onboarding.
+ * Garante captura resiliente de beforeinstallprompt e instalação direta em 1 clique.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -30,20 +30,38 @@ export function usePwaInstall() {
       (window.navigator as any).standalone === true;
     setIsInstalled(isStandalone);
 
-    // Captura o evento nativo de instalação do navegador
+    // 1. Recupera evento antes capturado no head do HTML caso já tenha disparado
+    const globalPrompt = (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__;
+    if (globalPrompt) {
+      setDeferredPrompt(globalPrompt);
+      setIsInstallable(true);
+    }
+
+    // 2. Escuta tanto o evento nativo quanto o evento customizado
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
+      (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__ = e;
       setDeferredPrompt(e);
       setIsInstallable(true);
+    };
+
+    const handleCustomInstallable = () => {
+      const p = (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__;
+      if (p) {
+        setDeferredPrompt(p);
+        setIsInstallable(true);
+      }
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setIsInstallable(false);
       setDeferredPrompt(null);
+      (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__ = null;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('scanpro:installable', handleCustomInstallable);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     // Checa permissão de notificação existente
@@ -53,23 +71,33 @@ export function usePwaInstall() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('scanpro:installable', handleCustomInstallable);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   // Solicitar instalação do App
   const promptInstall = useCallback(async (): Promise<boolean> => {
-    if (!deferredPrompt) {
+    const promptEvent =
+      deferredPrompt ||
+      (typeof window !== 'undefined'
+        ? (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__
+        : null);
+
+    if (!promptEvent) {
       return false;
     }
 
     try {
-      deferredPrompt.prompt();
-      const choiceResult = await deferredPrompt.userChoice;
-      if (choiceResult.outcome === 'accepted') {
+      await promptEvent.prompt();
+      const choiceResult = await promptEvent.userChoice;
+      if (choiceResult && choiceResult.outcome === 'accepted') {
         setIsInstalled(true);
         setIsInstallable(false);
         setDeferredPrompt(null);
+        if (typeof window !== 'undefined') {
+          (window as any).__SCANPRO_BEFORE_INSTALL_PROMPT__ = null;
+        }
         return true;
       }
       return false;
@@ -79,7 +107,7 @@ export function usePwaInstall() {
     }
   }, [deferredPrompt]);
 
-  // Solicitar permissão de câmera e aquecer o stream
+  // Solicitar permissão de câmera
   const requestCameraPermission = useCallback(async (): Promise<boolean> => {
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
       return false;
@@ -87,14 +115,16 @@ export function usePwaInstall() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: { facingMode: { ideal: 'environment' } },
       });
       stream.getTracks().forEach((track) => track.stop());
       setHasCameraPermission(true);
       return true;
     } catch {
       try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
         fallbackStream.getTracks().forEach((track) => track.stop());
         setHasCameraPermission(true);
         return true;
@@ -125,17 +155,10 @@ export function usePwaInstall() {
 
   // Ação mestre "Configurar Tudo com 1 Clique"
   const setupAllInOneClick = useCallback(async () => {
-    // 1. Câmera
     await requestCameraPermission();
-
-    // 2. Notificações
     await requestNotificationPermission();
-
-    // 3. Prompt de Instalação do App
-    if (deferredPrompt) {
-      await promptInstall();
-    }
-  }, [requestCameraPermission, requestNotificationPermission, promptInstall, deferredPrompt]);
+    await promptInstall();
+  }, [requestCameraPermission, requestNotificationPermission, promptInstall]);
 
   return {
     isInstallable,

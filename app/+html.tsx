@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 
 /**
  * ScanPro — Root HTML Document
- * Configura metatags de PWA, links para manifest.json e registro do Service Worker.
+ * Configura metatags de PWA, manifesto, Service Worker e captura antecipada de beforeinstallprompt.
  */
 export default function Root({ children }: PropsWithChildren) {
   return (
@@ -29,13 +29,20 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="ScanPro" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="icon" type="image/png" href="/favicon.png" />
 
-        {/* Registro do Service Worker para instalação PWA em 1 clique */}
+        {/* Captura antecipada e infalível de beforeinstallprompt para instalação em 1 clique */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              window.__SCANPRO_BEFORE_INSTALL_PROMPT__ = null;
+              window.addEventListener('beforeinstallprompt', function(e) {
+                e.preventDefault();
+                window.__SCANPRO_BEFORE_INSTALL_PROMPT__ = e;
+                window.dispatchEvent(new CustomEvent('scanpro:installable'));
+              });
+
               if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {

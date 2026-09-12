@@ -1,6 +1,6 @@
 /**
  * ScanPro — WebCameraView
- * Implementação com foco em máxima resolução fotográfica do sensor e suporte à API ImageCapture nativa.
+ * Câmera HTML5 com prioridade estrita para a câmera traseira, alta resolução e suporte à ImageCapture API.
  */
 
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
@@ -19,7 +19,7 @@ interface WebCameraViewProps {
 export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
   ({ facing, onCameraReady, onMountError }, ref) => {
     const videoRef = useRef<any>(null);
-    const streamRef = useRef<any>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
       if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) {
@@ -28,112 +28,98 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
 
       let isMounted = true;
 
-      const getBackCameraDeviceId = async (): Promise<string | undefined> => {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-          if (videoDevices.length === 0) return undefined;
-
-          // 1. Procura câmera com label contendo palavras indicativas de câmera traseira
-          const labeledBack = videoDevices.find((d) =>
-            /back|rear|traseir|environment|extern/i.test(d.label)
-          );
-          if (labeledBack?.deviceId) return labeledBack.deviceId;
-
-          // 2. Em dispositivos móveis (Android/iOS), a câmera traseira principal costuma ser a última
-          if (videoDevices.length > 1) {
-            return videoDevices[videoDevices.length - 1].deviceId;
-          }
-
-          return videoDevices[0].deviceId;
-        } catch {
-          return undefined;
-        }
-      };
-
       const initCamera = async () => {
-        // Encerra streams anteriores para trocar de lente
+        // Encerra streams anteriores para liberar o hardware da câmera
         if (streamRef.current) {
           try {
-            streamRef.current.getTracks().forEach((t: any) => t.stop());
+            streamRef.current.getTracks().forEach((t) => t.stop());
           } catch {}
           streamRef.current = null;
         }
 
         let stream: MediaStream | null = null;
 
-        // Resoluções de alta qualidade (prioriza alta definição para OCR e nitidez de texto)
-        const highResVideoConstraints = {
-          width: { ideal: 4032, min: 1920 },
-          height: { ideal: 3024, min: 1080 },
-          frameRate: { ideal: 30, max: 60 },
-        };
+        // Lista de restrições em ordem decrescente de prioridade para a câmera traseira
+        const constraintsAttempts: MediaStreamConstraints[] = [];
 
         if (facing === 'back') {
-          const backDeviceId = await getBackCameraDeviceId();
-
-          const backConstraintsList: MediaStreamConstraints[] = [
-            ...(backDeviceId
-              ? [
-                  {
-                    audio: false,
-                    video: {
-                      deviceId: { exact: backDeviceId },
-                      ...highResVideoConstraints,
-                    },
-                  },
-                ]
-              : []),
-            {
-              audio: false,
-              video: {
-                facingMode: { ideal: 'environment' },
-                ...highResVideoConstraints,
-              },
-            },
-            {
-              audio: false,
-              video: {
-                facingMode: 'environment',
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-              },
-            },
-          ];
-
-          for (const c of backConstraintsList) {
-            try {
-              stream = await navigator.mediaDevices.getUserMedia(c);
-              if (stream) break;
-            } catch {
-              // Continua para a próxima restrição
-            }
-          }
-        } else {
-          // Modo frontal
+          // 1. Tenta identificar se já existe dispositivo explicitamente rotulado como traseiro
           try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              audio: false,
-              video: {
-                facingMode: 'user',
-                ...highResVideoConstraints,
-              },
-            });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const backDevice = devices.find(
+              (d) => d.kind === 'videoinput' && /back|rear|traseir|environment/i.test(d.label)
+            );
+            if (backDevice?.deviceId) {
+              constraintsAttempts.push({
+                audio: false,
+                video: {
+                  deviceId: { exact: backDevice.deviceId },
+                  width: { ideal: 2560 },
+                  height: { ideal: 1440 },
+                },
+              });
+            }
+          } catch {}
+
+          // 2. facingMode exact environment (exige traseira sem ambiguidade)
+          constraintsAttempts.push({
+            audio: false,
+            video: {
+              facingMode: { exact: 'environment' },
+              width: { ideal: 2560 },
+              height: { ideal: 1440 },
+            },
+          });
+
+          // 3. facingMode ideal environment com alta resolução flexível
+          constraintsAttempts.push({
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1920 },
+              height: { ideal: 1440 },
+            },
+          });
+
+          // 4. facingMode environment simples
+          constraintsAttempts.push({
+            audio: false,
+            video: {
+              facingMode: 'environment',
+            },
+          });
+        } else {
+          // Câmera frontal solicitada expressamente pelo usuário
+          constraintsAttempts.push({
+            audio: false,
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+          });
+        }
+
+        // Tenta cada uma das restrições prioritárias
+        for (const c of constraintsAttempts) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(c);
+            if (stream) break;
           } catch {
-            // Continua para o fallback
+            // Continua para a próxima tentativa
           }
         }
 
-        // Fallback resiliente
+        // Se ainda não obteve stream, tenta fallback mas mantendo a preferência de traseira se facing === 'back'
         if (!stream) {
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               audio: false,
-              video: true,
+              video: facing === 'back' ? { facingMode: { ideal: 'environment' } } : true,
             });
-          } catch (finalErr) {
-            console.error('Falha geral ao acessar câmera:', finalErr);
-            if (isMounted) onMountError?.(finalErr);
+          } catch (err) {
+            console.error('Falha geral ao abrir câmera:', err);
+            if (isMounted) onMountError?.(err);
             return;
           }
         }
@@ -143,7 +129,7 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
           return;
         }
 
-        // Aplica otimizações de autofoco contínuo e exposição contínua na câmera se suportado
+        // Ativa autofoco contínuo e autoexposição nas faixas de vídeo se disponível
         try {
           const track = stream.getVideoTracks()[0];
           if (track && track.applyConstraints) {
@@ -155,16 +141,11 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
             if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
               adv.exposureMode = 'continuous';
             }
-            if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) {
-              adv.whiteBalanceMode = 'continuous';
-            }
             if (Object.keys(adv).length > 0) {
               track.applyConstraints({ advanced: [adv] }).catch(() => {});
             }
           }
-        } catch {
-          // Ignora caso applyConstraints não seja suportado
-        }
+        } catch {}
 
         streamRef.current = stream;
         if (videoRef.current) {
@@ -180,7 +161,7 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
         isMounted = false;
         if (streamRef.current) {
           try {
-            streamRef.current.getTracks().forEach((t: any) => t.stop());
+            streamRef.current.getTracks().forEach((t) => t.stop());
           } catch {}
           streamRef.current = null;
         }
@@ -195,7 +176,7 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
 
         const track = streamRef.current.getVideoTracks()[0];
 
-        // 1. Tenta captura fotográfica de resolução nativa total via ImageCapture API (Chromium/Android)
+        // 1. Tenta captura fotográfica de resolução total do sensor via ImageCapture API
         if (typeof window !== 'undefined' && 'ImageCapture' in window && track && track.readyState === 'live') {
           try {
             const imageCapture = new (window as any).ImageCapture(track);
@@ -216,11 +197,11 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
               reader.readAsDataURL(blob);
             });
           } catch (err) {
-            console.warn('ImageCapture falhou, recorrendo ao canvas de alta resolução:', err);
+            console.warn('ImageCapture fallback para canvas:', err);
           }
         }
 
-        // 2. Fallback para Canvas usando resolução máxima disponível no vídeo (iOS Safari ou navegadores sem ImageCapture)
+        // 2. Fallback para Canvas usando resolução do elemento video
         if (!videoRef.current) return null;
 
         const video = videoRef.current;
@@ -234,12 +215,10 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return null;
 
-        // Configurações de máxima nitidez no Canvas
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(video, 0, 0, width, height);
 
-        // Qualidade JPEG 0.98 preserva todos os detalhes finos de texto sem artefatos de compressão
         return canvas.toDataURL('image/jpeg', 0.98);
       },
     }));
@@ -249,7 +228,7 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
     }
 
     return (
-      <View style={StyleSheet.absoluteFill}>
+      <View style={styles.videoFill}>
         {React.createElement('video', {
           ref: videoRef,
           autoPlay: true,
@@ -269,3 +248,15 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
     );
   }
 );
+
+const styles = StyleSheet.create({
+  videoFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+});

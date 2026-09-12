@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
@@ -23,6 +24,8 @@ import { ScanFilterMode } from '../../types';
 export default function ScannerScreen() {
   const router = useRouter();
   const { addDocument } = useDocumentStore();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const previewImageHeight = Math.max(300, windowHeight - 210);
 
   const {
     cameraRef,
@@ -265,8 +268,8 @@ export default function ScannerScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Área Central Expandida da Imagem (Preenche a tela inteira) */}
-          <View style={styles.fullPreviewImageWrapper}>
+          {/* Área Central Expandida da Imagem (Preenche a tela inteira com altura dinâmica) */}
+          <View style={[styles.fullPreviewImageWrapper, { height: previewImageHeight }]}>
             {processedResult?.processedUri ? (
               <Image
                 source={{ uri: processedResult.processedUri }}
@@ -412,6 +415,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     height: '100%',
     width: '100%',
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'fixed' as any,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '100%',
+          overflow: 'hidden' as any,
+        }
+      : {}),
   },
   cameraErrorBanner: {
     marginHorizontal: spacing.default,
@@ -556,6 +570,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#090D16',
     justifyContent: 'space-between',
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'fixed' as any,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '100%',
+          overflow: 'hidden' as any,
+        }
+      : {}),
   },
   fullPreviewHeader: {
     flexDirection: 'row',

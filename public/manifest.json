@@ -1,32 +1,39 @@
 {
-  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
   "name": "ScanPro Document Scanner",
   "short_name": "ScanPro",
-  "description": "Scanner de documentos profissional e local-first com alta nitidez e exportação em PDF",
+  "description": "Digitalizador profissional de documentos, contratos e recibos com alta nitidez e exportação em PDF",
   "id": "/",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#090D16",
   "theme_color": "#007AFF",
   "orientation": "portrait",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/favicon.png",
@@ -34,19 +41,9 @@
       "type": "image/png"
     }
   ],
-  "categories": ["productivity", "utilities", "business"],
-  "shortcuts": [
-    {
-      "name": "Escanear Documento",
-      "short_name": "Escanear",
-      "description": "Abrir o scanner diretamente",
-      "url": "/scanner",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    }
+  "categories": [
+    "productivity",
+    "business",
+    "utilities"
   ]
 }
