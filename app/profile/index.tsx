@@ -13,17 +13,28 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
-import { BottomTabBar, AppButton, OnboardingInstallModal } from '../../components/ui';
-import { useDocumentStore } from '../../store';
+import { BottomTabBar, AppButton, OnboardingInstallModal, PaywallModal } from '../../components/ui';
+import { useDocumentStore, usePremiumStore } from '../../store';
 import { AuthService } from '../../services/auth';
 import { SyncService, SyncOverview } from '../../services/sync';
 import { BackupService } from '../../services/backup';
+import { TelemetryService } from '../../services/telemetry';
 
 export default function ProfileScreen() {
   const { documents, loadDocuments, loadFolders } = useDocumentStore();
+  const {
+    isPro,
+    entitlement,
+    isPaywallVisible,
+    openPaywall,
+    closePaywall,
+    cancelSubscription,
+    restorePurchases,
+  } = usePremiumStore();
 
   const [session, setSession] = useState(AuthService.getSession());
   const [syncOverview, setSyncOverview] = useState<SyncOverview>(SyncService.getOverview());
+  const [funnelSummary, setFunnelSummary] = useState(TelemetryService.getFunnelSummary());
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
@@ -109,6 +120,43 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleCancelSubscription = () => {
+    Alert.alert(
+      'Cancelar Assinatura Pro',
+      'Deseja retornar ao plano gratuito? Seus documentos locais continuarão preservados.',
+      [
+        { text: 'Manter Pro', style: 'cancel' },
+        {
+          text: 'Cancelar Plano',
+          style: 'destructive',
+          onPress: async () => {
+            await cancelSubscription();
+            Alert.alert('Plano Atualizado', 'Sua assinatura foi cancelada com sucesso.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearTelemetry = () => {
+    Alert.alert(
+      'Redefinir Métricas',
+      'Deseja limpar os dados locais de telemetria e diagnósticos?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpar',
+          style: 'destructive',
+          onPress: () => {
+            TelemetryService.clearAll();
+            setFunnelSummary(TelemetryService.getFunnelSummary());
+            Alert.alert('Sucesso', 'Telemetria local reiniciada.');
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -139,6 +187,67 @@ export default function ProfileScreen() {
               {session.isAnonymous ? 'Entrar' : 'Sair'}
             </Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Seção de Assinatura & Plano Pro (Fase 9) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Plano & Benefícios</Text>
+          <View style={[styles.menuCard, shadows.card, isPro && styles.proActiveCard]}>
+            <View style={styles.proHeaderRow}>
+              <View
+                style={[
+                  styles.proIconCircle,
+                  isPro ? styles.proIconCircleActive : styles.proIconCircleFree,
+                ]}
+              >
+                <Ionicons
+                  name={isPro ? 'sparkles' : 'ribbon-outline'}
+                  size={24}
+                  color={isPro ? '#B45309' : colors.primary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.proTitleBadgeRow}>
+                  <Text style={styles.menuItemTitle}>
+                    {isPro ? 'ScanPro Pro' : 'ScanPro Gratuito'}
+                  </Text>
+                  {isPro ? (
+                    <View style={styles.activePill}>
+                      <Text style={styles.activePillText}>ATIVO</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.freePill}>
+                      <Text style={styles.freePillText}>BÁSICO</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.menuItemSubtitle}>
+                  {isPro
+                    ? `Plano ${entitlement.plan === 'yearly' ? 'Anual' : 'Mensal'} • Válido até ${entitlement.expirationDate ? new Date(entitlement.expirationDate).toLocaleDateString('pt-BR') : 'ilimitado'}`
+                    : 'Limite de até 5 documentos salvos. Faça upgrade para ter OCR, PDFs HD e digitalizações sem limites.'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.proActionButtons}>
+              {!isPro ? (
+                <AppButton
+                  title="Fazer Upgrade para o Pro"
+                  variant="primary"
+                  onPress={openPaywall}
+                  icon={<Ionicons name="sparkles" size={16} color="#FFFFFF" />}
+                  style={{ flex: 1 }}
+                />
+              ) : (
+                <AppButton
+                  title="Cancelar Assinatura"
+                  variant="tertiary"
+                  onPress={handleCancelSubscription}
+                  style={{ flex: 1 }}
+                />
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Card de Estatísticas Locais */}
@@ -251,13 +360,44 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Seção de Telemetria & Monitoramento de Performance (Fase 10) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Performance & Telemetria Local</Text>
+          <View style={[styles.menuCard, shadows.card]}>
+            <Text style={styles.telemetryDescription}>
+              Métricas e diagnósticos locais anônimos da métrica North Star e funil de conversão.
+            </Text>
+            <View style={styles.telemetryGrid}>
+              <View style={styles.telemetryStatItem}>
+                <Text style={styles.telemetryStatValue}>{funnelSummary.scannerOpens}</Text>
+                <Text style={styles.telemetryStatLabel}>Scanners Abertos</Text>
+              </View>
+              <View style={styles.telemetryStatItem}>
+                <Text style={styles.telemetryStatValue}>{funnelSummary.pdfGenerated}</Text>
+                <Text style={styles.telemetryStatLabel}>PDFs Gerados</Text>
+              </View>
+              <View style={styles.telemetryStatItem}>
+                <Text style={styles.telemetryStatValue}>
+                  {funnelSummary.averageScanToPdfMs
+                    ? `${(funnelSummary.averageScanToPdfMs / 1000).toFixed(1)}s`
+                    : '—'}
+                </Text>
+                <Text style={styles.telemetryStatLabel}>Média Scan → PDF</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.clearTelemetryButton} onPress={handleClearTelemetry}>
+              <Text style={styles.clearTelemetryText}>Redefinir Métricas Locais</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Sobre o Aplicativo */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Sobre o ScanPro</Text>
           <View style={styles.menuCard}>
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Versão do App</Text>
-              <Text style={styles.aboutValue}>1.0.0 (Fase 8 - Cloud & RLS)</Text>
+              <Text style={styles.aboutValue}>1.0.0 (Fases 9 & 10 - Pro & Production)</Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
@@ -362,6 +502,12 @@ export default function ProfileScreen() {
       <OnboardingInstallModal
         visible={isOnboardingVisible}
         onClose={() => setIsOnboardingVisible(false)}
+      />
+
+      {/* Modal de Assinatura ScanPro Pro (Fase 9) */}
+      <PaywallModal
+        visible={isPaywallVisible}
+        onClose={closePaywall}
       />
     </SafeAreaView>
   );
@@ -612,6 +758,101 @@ const styles = StyleSheet.create({
   dialogActions: {
     flexDirection: 'row',
     gap: spacing.small,
+  },
+  proActiveCard: {
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFEFA',
+  },
+  proHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.default,
+  },
+  proIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.compact,
+  },
+  proIconCircleFree: {
+    backgroundColor: '#EBF4FF',
+  },
+  proIconCircleActive: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  proTitleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activePill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  freePill: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  freePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  proActionButtons: {
+    flexDirection: 'row',
+    gap: spacing.small,
+    marginTop: spacing.micro,
+  },
+  telemetryDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.compact,
+    lineHeight: 16,
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    padding: spacing.compact,
+    marginBottom: spacing.compact,
+  },
+  telemetryStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  telemetryStatValue: {
+    ...typography.headline,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  telemetryStatLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  clearTelemetryButton: {
+    alignSelf: 'center',
+    paddingVertical: spacing.micro,
+  },
+  clearTelemetryText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '600',
   },
   onboardingMenuItem: {
     flexDirection: 'row',

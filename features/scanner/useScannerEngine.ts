@@ -7,6 +7,7 @@ import { ScannerStatus, DocumentDetection, ScanFilterMode } from '../../types';
 import { ProcessingPipeline, ProcessedPageResult } from '../../services/processing';
 import { OcrService } from '../../services/ocr/ocrService';
 import { WebCameraViewRef } from '../../components/scanner/WebCameraView';
+import { TelemetryService } from '../../services/telemetry';
 
 export function useScannerEngine() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -98,12 +99,14 @@ export function useScannerEngine() {
         result.ocrText = ocrResult.text;
         result.suggestedTitle = ocrResult.suggestedTitle;
 
+        TelemetryService.track('successful_processing', { filterMode: mode });
         setProcessedResult(result);
         setStatus('CAPTURE_SUCCESS');
         triggerHaptic();
         return result;
       } catch (err) {
         console.error('Falha no pipeline de processamento de imagem:', err);
+        TelemetryService.reportCrash(err, { context: 'processCapturedImage' });
         // Fallback seguro em caso de falha de codec
         const fallbackResult: ProcessedPageResult = {
           originalUri: imageUri,
@@ -130,6 +133,7 @@ export function useScannerEngine() {
     try {
       setStatus('CAPTURING');
       triggerHaptic();
+      TelemetryService.track('capture');
 
       let photoUri: string | null = null;
 

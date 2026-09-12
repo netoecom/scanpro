@@ -2,6 +2,7 @@ import { PDFDocument } from 'pdf-lib';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { TelemetryService } from '../telemetry';
 
 export interface GeneratePdfOptions {
   title: string;
@@ -115,6 +116,13 @@ export class PdfService {
     const pdfBytes = await pdfDoc.save();
     const sizeBytes = pdfBytes.byteLength;
 
+    TelemetryService.track('pdf_generated', {
+      title: options.title,
+      pageCount: options.pages.length,
+      sizeBytes,
+    });
+    TelemetryService.finishScanTrace(options.title);
+
     if (Platform.OS === 'web') {
       const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
       const uri = URL.createObjectURL(blob);
@@ -143,6 +151,8 @@ export class PdfService {
    * Compartilha o PDF via Share Sheet nativo ou download no navegador
    */
   static async sharePdf(pdfUri: string, title = 'ScanPro Document'): Promise<void> {
+    TelemetryService.track('pdf_shared', { title });
+
     if (Platform.OS === 'web') {
       if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
         try {

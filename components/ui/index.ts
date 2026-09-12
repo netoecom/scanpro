@@ -6,4 +6,4 @@ export * from './BottomTabBar';
 export * from './PageThumbnail';
 export * from './PageStrip';
 export * from './OnboardingInstallModal';
-
+export * from './PaywallModal';

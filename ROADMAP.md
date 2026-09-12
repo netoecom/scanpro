@@ -110,22 +110,26 @@ DoD:
 - restore;
 - RLS.
 
-## Fase 9 — Premium
+## Fase 9 — Premium (Concluída ✅)
 
-- RevenueCat;
-- entitlement;
-- paywall;
-- restore purchases;
-- subscription states.
+- [x] RevenueCat-ready architecture & entitlement model (`services/premium/types.ts`);
+- [x] Entitlement & tier manager com persistência offline (`services/premium/premiumService.ts`);
+- [x] Store reativa Zustand (`store/usePremiumStore.ts`);
+- [x] Modal de Paywall de alta conversão (`components/ui/PaywallModal.tsx`);
+- [x] Pacotes Anual (R$ 99,90/ano, 44% OFF, 3 dias grátis) e Mensal (R$ 14,90/mês);
+- [x] Limite de 5 documentos para usuários Free com gatilhos amigáveis;
+- [x] Restaurar compras e cancelamento de assinatura integrados;
+- [x] Badges Pro e pontos de entrada na Home (`app/index.tsx`), Scanner (`app/scanner/index.tsx`) e Ajustes (`app/profile/index.tsx`).
 
-## Fase 10 — Production
+## Fase 10 — Production & Release Readiness (Concluída ✅)
 
-- crash monitoring;
-- analytics de produto;
-- performance monitoring;
-- privacy;
-- store assets;
-- release pipeline.
+- [x] Telemetria local-first anônima (`services/telemetry/telemetryService.ts`);
+- [x] Rastreamento do funil North Star (`app_open` → `scanner_opened` → `capture` → `successful_processing` → `pdf_generated` → `pdf_shared` → `paywall_viewed` → `subscription_purchased`);
+- [x] Performance monitoring e cálculo de tempo entre abrir scanner e PDF pronto;
+- [x] Crash monitoring anônimo com persistência local e diagnóstico para suporte;
+- [x] Privacy e Local-First compliance com opção de reset de métricas;
+- [x] PWA 100% instalável em 1 clique (`app/+html.tsx`, `public/sw.js`, `public/manifest.json`);
+- [x] Suporte a câmera traseira com alta resolução e autofoco.
 
 ## Métricas principais
 

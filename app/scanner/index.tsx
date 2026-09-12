@@ -10,22 +10,30 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget } from '../../theme';
-import { AppButton, PageStrip } from '../../components/ui';
+import { AppButton, PageStrip, PaywallModal } from '../../components/ui';
 import { CaptureButton, ScannerOverlay, WebCameraView } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
-import { useDocumentStore } from '../../store';
+import { useDocumentStore, usePremiumStore } from '../../store';
+import { TelemetryService } from '../../services/telemetry';
 import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const { addDocument } = useDocumentStore();
+  const { addDocument, documents } = useDocumentStore();
+  const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const previewImageHeight = Math.max(300, windowHeight - 210);
+
+  React.useEffect(() => {
+    TelemetryService.track('scanner_opened');
+    TelemetryService.startScanTrace();
+  }, []);
 
   const {
     cameraRef,
@@ -84,8 +92,43 @@ export default function ScannerScreen() {
     );
   }
 
+  // Valida o limite do plano gratuito antes de disparar a captura
+  const handleCapturePress = async () => {
+    if (!isPro && documents.length >= 5) {
+      Alert.alert(
+        'Limite do Plano Gratuito',
+        'Você atingiu o limite de 5 documentos salvos do plano gratuito. Faça upgrade para o ScanPro Pro para digitalizar sem limites!',
+        [
+          { text: 'Agora Não', style: 'cancel' },
+          {
+            text: 'Conhecer o Pro 💎',
+            onPress: openPaywall,
+          },
+        ]
+      );
+      return;
+    }
+    await captureDocument();
+  };
+
   // Concluir e salvar o documento no repositório local com suporte a título sugerido por OCR
   const handleFinishScan = async () => {
+    // Validação de Limite do Plano Gratuito (Fase 9)
+    if (!isPro && documents.length >= 5) {
+      Alert.alert(
+        'Limite do Plano Gratuito',
+        'Você atingiu o limite de 5 documentos salvos do plano gratuito. Faça upgrade para o ScanPro Pro para salvar novos documentos sem restrições!',
+        [
+          { text: 'Mais Tarde', style: 'cancel' },
+          {
+            text: 'Conhecer o Pro 💎',
+            onPress: openPaywall,
+          },
+        ]
+      );
+      return;
+    }
+
     const allPages = [...capturedPages];
     if (processedResult) {
       allPages.push(processedResult);
@@ -217,7 +260,7 @@ export default function ScannerScreen() {
           {/* Botão Central de Disparo Dominante */}
           <View style={styles.captureButtonContainer}>
             <CaptureButton
-              onPress={captureDocument}
+              onPress={handleCapturePress}
               disabled={status === 'CAPTURING' || status === 'PROCESSING'}
               loading={status === 'CAPTURING' || status === 'PROCESSING'}
               autoCaptureActive={autoCapture}
@@ -405,6 +448,12 @@ export default function ScannerScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Modal de Assinatura Pro (Fase 9) */}
+      <PaywallModal
+        visible={isPaywallVisible}
+        onClose={closePaywall}
+      />
     </View>
   );
 }

@@ -11,18 +11,21 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../theme';
-import { DocumentCard, EmptyState, BottomTabBar, OnboardingInstallModal } from '../components/ui';
-import { useDocumentStore } from '../store';
+import { DocumentCard, EmptyState, BottomTabBar, OnboardingInstallModal, PaywallModal } from '../components/ui';
+import { useDocumentStore, usePremiumStore } from '../store';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+import { TelemetryService } from '../services/telemetry';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { documents, loadDocuments, toggleFavorite } = useDocumentStore();
+  const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { isInstalled } = usePwaInstall();
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
 
   useEffect(() => {
+    TelemetryService.track('app_open');
     loadDocuments();
 
     // Abre o onboarding na primeira vez na web se o app não estiver instalado
@@ -63,13 +66,34 @@ export default function HomeScreen() {
               <Text style={styles.greeting}>{getGreeting()}</Text>
               <Text style={styles.appTitle}>ScanPro</Text>
             </View>
-            <TouchableOpacity
-              style={styles.profileButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={() => router.push('/profile')}
-            >
-              <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={[styles.proBadge, isPro ? styles.proBadgeActive : styles.proBadgeCta]}
+                onPress={openPaywall}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={isPro ? 'star' : 'sparkles'}
+                  size={14}
+                  color={isPro ? '#B45309' : colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.proBadgeText,
+                    isPro ? styles.proBadgeTextActive : styles.proBadgeTextCta,
+                  ]}
+                >
+                  {isPro ? 'PRO' : 'Seja PRO'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.profileButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                onPress={() => router.push('/profile')}
+              >
+                <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Banner de Instalação Rápida com 1 Clique */}
@@ -160,6 +184,12 @@ export default function HomeScreen() {
         onClose={() => setIsOnboardingVisible(false)}
         onStartScanning={handleScanPress}
       />
+
+      {/* Modal de Assinatura ScanPro Pro (Fase 9) */}
+      <PaywallModal
+        visible={isPaywallVisible}
+        onClose={closePaywall}
+      />
     </SafeAreaView>
   );
 }
@@ -197,6 +227,39 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.minSize,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+  },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.capsule,
+    gap: 4,
+  },
+  proBadgeCta: {
+    backgroundColor: '#EBF4FF',
+    borderWidth: 1,
+    borderColor: '#B9D5FF',
+  },
+  proBadgeActive: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  proBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  proBadgeTextCta: {
+    color: colors.primary,
+  },
+  proBadgeTextActive: {
+    color: '#92400E',
   },
   installBanner: {
     flexDirection: 'row',
