@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 229, 255, 0.4)',
     ...(Platform.OS === 'web'
       ? {
-          background: 'linear-gradient(to top, rgba(0, 229, 255, 0.32), rgba(0, 229, 255, 0.0))',
+          backgroundImage: 'linear-gradient(to top, rgba(0, 229, 255, 0.32), rgba(0, 229, 255, 0.0))',
         }
       : {}),
   },
