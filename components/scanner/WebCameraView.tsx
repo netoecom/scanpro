@@ -110,12 +110,24 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
           }
         }
 
-        // Se ainda não obteve stream, tenta fallback mas mantendo a preferência de traseira se facing === 'back'
+        // Se ainda não obteve stream, tenta fallback mantendo a preferência de traseira
         if (!stream) {
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               audio: false,
               video: facing === 'back' ? { facingMode: { ideal: 'environment' } } : true,
+            });
+          } catch {
+            // Continua para o fallback final universal
+          }
+        }
+
+        // Fallback final: qualquer câmera de vídeo disponível
+        if (!stream) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: true,
             });
           } catch (err) {
             console.error('Falha geral ao abrir câmera:', err);
@@ -230,7 +242,13 @@ export const WebCameraView = forwardRef<WebCameraViewRef, WebCameraViewProps>(
     return (
       <View style={styles.videoFill}>
         {React.createElement('video', {
-          ref: videoRef,
+          ref: (el: any) => {
+            videoRef.current = el;
+            if (el && streamRef.current && el.srcObject !== streamRef.current) {
+              el.srcObject = streamRef.current;
+              el.play().catch(() => {});
+            }
+          },
           autoPlay: true,
           playsInline: true,
           muted: true,

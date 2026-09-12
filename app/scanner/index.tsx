@@ -238,7 +238,7 @@ export default function ScannerScreen() {
         </View>
 
         {/* Banner de Status ou Alerta de Câmera */}
-        {cameraError && (
+        {!isCameraReady && cameraError && (
           <View style={styles.cameraErrorBanner}>
             <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
             <Text style={styles.cameraErrorText}>{cameraError}</Text>

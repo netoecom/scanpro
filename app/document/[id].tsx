@@ -27,6 +27,7 @@ export default function DocumentDetailScreen() {
   const {
     documents,
     currentPages,
+    loadDocuments,
     loadDocumentPages,
     reorderDocumentPages,
     deleteDocumentPage,
@@ -47,7 +48,10 @@ export default function DocumentDetailScreen() {
     if (id) {
       loadDocumentPages(id);
     }
-  }, [id, loadDocumentPages]);
+    if (documents.length === 0) {
+      loadDocuments();
+    }
+  }, [id, loadDocumentPages, loadDocuments, documents.length]);
 
   if (!document) {
     return (

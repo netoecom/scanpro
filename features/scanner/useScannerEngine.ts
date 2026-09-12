@@ -10,7 +10,10 @@ import { WebCameraViewRef } from '../../components/scanner/WebCameraView';
 import { TelemetryService } from '../../services/telemetry';
 
 export function useScannerEngine() {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [nativePermission, requestNativePermission] = useCameraPermissions();
+  const [webPermissionGranted, setWebPermissionGranted] = useState<boolean | null>(
+    Platform.OS === 'web' ? null : null
+  );
   const [status, setStatus] = useState<ScannerStatus>('SCANNER_SEARCHING');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -39,12 +42,70 @@ export function useScannerEngine() {
     }
   }, []);
 
-  // Solicitar permissão ao inicializar
+  // Monitorar permissão nativa ou de navegador
   useEffect(() => {
-    if (!permission) {
-      requestPermission();
+    if (Platform.OS !== 'web') {
+      if (!nativePermission) {
+        requestNativePermission();
+      }
+      return;
     }
-  }, [permission, requestPermission]);
+
+    // No Web/PWA: Checa estado da permissão de câmera sem disparar dialog prematuro
+    let isMounted = true;
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'camera' as any })
+        .then((statusObj) => {
+          if (!isMounted) return;
+          if (statusObj.state === 'granted') {
+            setWebPermissionGranted(true);
+          } else if (statusObj.state === 'denied') {
+            setWebPermissionGranted(false);
+          } else {
+            // 'prompt' -> permite que WebCameraView inicialize diretamente para exibir o diálogo nativo do navegador
+            setWebPermissionGranted(true);
+          }
+
+          statusObj.onchange = () => {
+            if (!isMounted) return;
+            setWebPermissionGranted(statusObj.state !== 'denied');
+          };
+        })
+        .catch(() => {
+          if (isMounted) setWebPermissionGranted(true);
+        });
+    } else {
+      setWebPermissionGranted(true);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [nativePermission, requestNativePermission]);
+
+  const requestPermission = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach((t) => t.stop());
+          setWebPermissionGranted(true);
+          setCameraError(null);
+          return { granted: true };
+        }
+      } catch (err: any) {
+        setWebPermissionGranted(false);
+        setCameraError(
+          'Permissão negada no navegador. Permita o acesso à câmera nas configurações do seu navegador.'
+        );
+        return { granted: false };
+      }
+      return { granted: false };
+    } else {
+      return await requestNativePermission();
+    }
+  }, [requestNativePermission]);
 
   const toggleFacing = useCallback(() => {
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
@@ -54,11 +115,24 @@ export function useScannerEngine() {
   const handleCameraReady = useCallback(() => {
     setIsCameraReady(true);
     setCameraError(null);
+    setWebPermissionGranted(true);
   }, []);
 
   const handleMountError = useCallback((error: any) => {
     console.warn('Erro ao inicializar câmera:', error);
-    setCameraError('Câmera indisponível ou permissão bloqueada no navegador.');
+    const errName = error?.name || '';
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+      setWebPermissionGranted(false);
+      setCameraError(
+        'Permissão de câmera bloqueada pelo navegador. Ative a câmera no ícone de configurações do site.'
+      );
+    } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+      setCameraError('Nenhuma câmera física encontrada no dispositivo.');
+    } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+      setCameraError('A câmera está sendo utilizada por outro aplicativo.');
+    } else {
+      setCameraError('Não foi possível iniciar a câmera.');
+    }
   }, []);
 
   // Simulação inteligente de detecção contínua de documento com cooldown
@@ -245,8 +319,14 @@ export function useScannerEngine() {
     cameraRef,
     webCameraRef,
     status,
-    hasPermission: permission?.granted ?? false,
-    canAskAgain: permission?.canAskAgain ?? true,
+    hasPermission:
+      Platform.OS === 'web'
+        ? webPermissionGranted !== false
+        : (nativePermission?.granted ?? false),
+    canAskAgain:
+      Platform.OS === 'web'
+        ? true
+        : (nativePermission?.canAskAgain ?? true),
     requestPermission,
     flash,
     facing,
