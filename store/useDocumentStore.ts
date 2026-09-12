@@ -38,6 +38,17 @@ interface DocumentState {
     }>,
     folderId?: string | null
   ) => Promise<Document>;
+  addPagesToDocument: (
+    documentId: string,
+    pages: Array<{
+      originalPath: string;
+      processedPath: string;
+      thumbnailPath: string;
+      width: number;
+      height: number;
+      ocrText?: string;
+    }>
+  ) => Promise<void>;
   loadDocumentPages: (documentId: string) => Promise<DocumentPage[]>;
   reorderDocumentPages: (documentId: string, pageIdsInOrder: string[]) => Promise<void>;
   deleteDocumentPage: (documentId: string, pageId: string) => Promise<void>;
@@ -231,6 +242,50 @@ export const useDocumentStore = create<DocumentState>((set, get) => {
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : 'Falha ao salvar documento',
+          isLoading: false,
+        });
+        throw err;
+      }
+    },
+
+    addPagesToDocument: async (documentId, pages) => {
+      set({ isLoading: true, error: null });
+      try {
+        const existingPages = await repository.getDocumentPages(documentId);
+        const startIndex = existingPages.length;
+
+        for (let i = 0; i < pages.length; i++) {
+          const p = pages[i];
+          await repository.addPage(documentId, {
+            ...p,
+            pageIndex: startIndex + i,
+          });
+        }
+
+        const updatedPages = await repository.getDocumentPages(documentId);
+        const updatedDoc = await repository.getDocument(documentId);
+
+        set((state) => ({
+          currentPages:
+            state.selectedDocument?.id === documentId ? updatedPages : state.currentPages,
+          documents: state.documents.map((d) =>
+            d.id === documentId
+              ? updatedDoc || {
+                  ...d,
+                  pageCount: updatedPages.length,
+                  updatedAt: new Date().toISOString(),
+                }
+              : d
+          ),
+          selectedDocument:
+            state.selectedDocument?.id === documentId && updatedDoc
+              ? updatedDoc
+              : state.selectedDocument,
+          isLoading: false,
+        }));
+      } catch (err) {
+        set({
+          error: err instanceof Error ? err.message : 'Falha ao adicionar páginas ao documento',
           isLoading: false,
         });
         throw err;

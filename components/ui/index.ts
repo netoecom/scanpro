@@ -7,3 +7,5 @@ export * from './PageThumbnail';
 export * from './PageStrip';
 export * from './OnboardingInstallModal';
 export * from './PaywallModal';
+export * from './ConfirmModal';
+export * from './ModernIntroSplash';

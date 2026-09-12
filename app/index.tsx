@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
+  Animated,
+  Easing,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../theme';
-import { DocumentCard, EmptyState, BottomTabBar, OnboardingInstallModal, PaywallModal } from '../components/ui';
+import { DocumentCard, EmptyState, BottomTabBar, OnboardingInstallModal, PaywallModal, ConfirmModal, ModernIntroSplash } from '../components/ui';
 import { useDocumentStore, usePremiumStore } from '../store';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { TelemetryService } from '../services/telemetry';
@@ -23,20 +26,39 @@ export default function HomeScreen() {
   const { isInstalled } = usePwaInstall();
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<{ id: string; title: string } | null>(null);
+
+  // Splash de Introdução Homogêneo e Moderno na inicialização da sessão
+  const [showIntroSplash, setShowIntroSplash] = useState(() => {
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      return !sessionStorage.getItem('scanpro_session_intro_shown');
+    }
+    return true;
+  });
+
+  // Animação de entrada suave e moderna na inicialização do app
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 380,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [fadeAnim]);
 
   useEffect(() => {
     TelemetryService.track('app_open');
     loadDocuments();
+  }, [loadDocuments]);
 
-    // Abre o onboarding na primeira vez na web se o app não estiver instalado
-    if (typeof window !== 'undefined' && !isInstalled) {
-      const hasSeen = localStorage.getItem('scanpro_has_seen_onboarding');
-      if (!hasSeen) {
-        setIsOnboardingVisible(true);
-        localStorage.setItem('scanpro_has_seen_onboarding', 'true');
-      }
+  const handleIntroFinish = () => {
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('scanpro_session_intro_shown', 'true');
     }
-  }, [loadDocuments, isInstalled]);
+    setShowIntroSplash(false);
+  };
 
   const handleScanPress = () => {
     router.push('/scanner' as any);
@@ -47,20 +69,7 @@ export default function HomeScreen() {
   };
 
   const handleDeleteDocument = (id: string, title: string) => {
-    Alert.alert(
-      'Excluir Documento',
-      `Deseja realmente excluir permanentemente "${title}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteDocument(id);
-          },
-        },
-      ]
-    );
+    setConfirmDeleteDoc({ id, title });
   };
 
   const getGreeting = () => {
@@ -72,126 +81,106 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header com saudação e título */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.appTitle}>ScanPro</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={[styles.proBadge, isPro ? styles.proBadgeActive : styles.proBadgeCta]}
-                onPress={openPaywall}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={isPro ? 'star' : 'sparkles'}
-                  size={14}
-                  color={isPro ? '#B45309' : colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.proBadgeText,
-                    isPro ? styles.proBadgeTextActive : styles.proBadgeTextCta,
-                  ]}
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header com saudação e título */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.greeting}>{getGreeting()}</Text>
+                <Text style={styles.appTitle}>ScanPro</Text>
+              </View>
+              <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={[styles.proBadge, isPro ? styles.proBadgeActive : styles.proBadgeCta]}
+                  onPress={openPaywall}
+                  activeOpacity={0.8}
                 >
-                  {isPro ? 'PRO' : 'Seja PRO'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.profileButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                onPress={() => router.push('/profile')}
-              >
-                <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />
-              </TouchableOpacity>
+                  <Ionicons
+                    name={isPro ? 'star' : 'sparkles'}
+                    size={14}
+                    color={isPro ? '#B45309' : colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.proBadgeText,
+                      isPro ? styles.proBadgeTextActive : styles.proBadgeTextCta,
+                    ]}
+                  >
+                    {isPro ? 'ScanPro Pro' : 'Conhecer Pro'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Atalho para Onboarding / Guia de Instalação */}
+                <TouchableOpacity
+                  style={styles.helpButton}
+                  onPress={() => setIsOnboardingVisible(true)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="help-circle-outline" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          {/* Banner de Instalação Rápida com 1 Clique */}
-          {!isInstalled && (
+            {/* Banner de Digitalização Rápida */}
             <TouchableOpacity
-              style={[styles.installBanner, shadows.subtle]}
-              activeOpacity={0.88}
-              onPress={() => setIsOnboardingVisible(true)}
-            >
-              <View style={styles.installBannerIcon}>
-                <Ionicons name="sparkles" size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.installBannerContent}>
-                <Text style={styles.installBannerTitle}>Instalar ScanPro no Celular</Text>
-                <Text style={styles.installBannerSubtitle}>
-                  Ative a câmera, notificações e instale com 1 clique
-                </Text>
-              </View>
-              <View style={styles.installBannerPill}>
-                <Text style={styles.installBannerPillText}>Ativar</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* CTA Principal de Scanner (Visualmente Dominante) */}
-          <View style={styles.heroCtaContainer}>
-            <TouchableOpacity
-              activeOpacity={0.88}
+              style={styles.heroCtaButton}
               onPress={handleScanPress}
-              style={[styles.heroCtaButton, shadows.floating]}
+              activeOpacity={0.9}
             >
               <View style={styles.heroIconWrapper}>
-                <Ionicons name="camera" size={32} color="#FFFFFF" />
+                <Ionicons name="scan" size={32} color="#FFFFFF" />
               </View>
               <View style={styles.heroTextWrapper}>
-                <Text style={styles.heroCtaTitle}>Escanear documento</Text>
+                <Text style={styles.heroCtaTitle}>Escanear Documento</Text>
                 <Text style={styles.heroCtaSubtitle}>
-                  Aponte, capture e gere seu PDF instantaneamente
+                  Detecção automática de bordas, OCR e PDF instantâneo
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-          </View>
 
-          {/* Seção de Documentos Recentes */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recentes</Text>
-            {documents.length > 0 && (
-              <TouchableOpacity
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                onPress={() => router.push('/documents')}
-              >
-                <Text style={styles.seeAllText}>Ver todos</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Lista de Recentes ou Estado Vazio */}
-          {documents.length === 0 ? (
-            <EmptyState
-              icon="document-text-outline"
-              title="Nenhum documento ainda"
-              description="Seus documentos digitalizados com qualidade profissional aparecerão aqui."
-              actionTitle="Escanear primeiro documento"
-              onActionPress={handleScanPress}
-            />
-          ) : (
-            <View style={styles.documentsList}>
-              {documents.slice(0, 5).map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  document={doc}
-                  onPress={() => handleDocumentPress(doc.id)}
-                  onToggleFavorite={() => toggleFavorite(doc.id)}
-                  onDelete={() => handleDeleteDocument(doc.id, doc.title)}
-                />
-              ))}
+            {/* Seção de Documentos Recentes */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Documentos Recentes</Text>
+              {documents.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/documents')}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.seeAllText}>Ver todos ({documents.length})</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </ScrollView>
-      </View>
+
+            {/* Lista ou Estado Vazio */}
+            {documents.length === 0 ? (
+              <EmptyState
+                icon="document-text-outline"
+                title="Nenhum documento ainda"
+                description="Toque no botão abaixo ou no banner acima para digitalizar seu primeiro recibo, contrato ou nota fiscal."
+                actionTitle="Escanear Agora"
+                onActionPress={handleScanPress}
+              />
+            ) : (
+              <View style={styles.documentsList}>
+                {documents.slice(0, 5).map((doc) => (
+                  <DocumentCard
+                    key={doc.id}
+                    document={doc}
+                    onPress={() => handleDocumentPress(doc.id)}
+                    onToggleFavorite={() => toggleFavorite(doc.id)}
+                    onDelete={() => handleDeleteDocument(doc.id, doc.title)}
+                  />
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Animated.View>
 
       {/* Navegação Inferior (BottomTabBar) */}
       <BottomTabBar onScanPress={handleScanPress} />
@@ -208,6 +197,25 @@ export default function HomeScreen() {
         visible={isPaywallVisible}
         onClose={closePaywall}
       />
+
+      {/* Confirmação de Exclusão de Documento */}
+      <ConfirmModal
+        visible={confirmDeleteDoc !== null}
+        title="Excluir Documento"
+        message={`Deseja realmente excluir permanentemente "${confirmDeleteDoc?.title}" e todas as suas páginas?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={async () => {
+          if (!confirmDeleteDoc) return;
+          const { id } = confirmDeleteDoc;
+          setConfirmDeleteDoc(null);
+          await deleteDocument(id);
+        }}
+        onCancel={() => setConfirmDeleteDoc(null)}
+      />
+
+      {/* Animação Introdutória Homogênea e Moderna ao Abrir o App */}
+      {showIntroSplash && <ModernIntroSplash onFinish={handleIntroFinish} />}
     </SafeAreaView>
   );
 }
@@ -250,6 +258,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.small,
+  },
+  helpButton: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   proBadge: {
     flexDirection: 'row',

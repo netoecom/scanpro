@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
-import { SearchField, DocumentCard, EmptyState, BottomTabBar, AppButton } from '../../components/ui';
+import { SearchField, DocumentCard, EmptyState, BottomTabBar, AppButton, ConfirmModal } from '../../components/ui';
 import { useDocumentStore } from '../../store';
 
 type FilterTab = 'all' | 'favorites';
@@ -30,6 +30,7 @@ export default function DocumentsScreen() {
     setSearchQuery,
     toggleFavorite,
     deleteDocument,
+    deleteFolder,
     loadDocuments,
     loadFolders,
     createFolder,
@@ -40,6 +41,11 @@ export default function DocumentsScreen() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<{
+    type: 'document' | 'folder';
+    id: string;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     loadDocuments();
@@ -65,20 +71,32 @@ export default function DocumentsScreen() {
   };
 
   const handleDeleteDocument = (id: string, title: string) => {
-    Alert.alert(
-      'Excluir Documento',
-      `Deseja realmente excluir permanentemente "${title}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteDocument(id);
-          },
-        },
-      ]
-    );
+    setConfirmDelete({
+      type: 'document',
+      id,
+      name: title,
+    });
+  };
+
+  const handleDeleteFolder = (id: string, name: string) => {
+    setConfirmDelete({
+      type: 'folder',
+      id,
+      name,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      if (confirmDelete.type === 'document') {
+        await deleteDocument(confirmDelete.id);
+      } else if (confirmDelete.type === 'folder') {
+        await deleteFolder(confirmDelete.id);
+      }
+    } finally {
+      setConfirmDelete(null);
+    }
   };
 
   return (
@@ -157,31 +175,48 @@ export default function DocumentsScreen() {
               </Text>
             </TouchableOpacity>
 
-            {folders.map((folder) => (
-              <TouchableOpacity
-                key={folder.id}
-                style={[
-                  styles.folderChip,
-                  activeFolderId === folder.id && styles.folderChipActive,
-                ]}
-                onPress={() => setActiveFolderId(folder.id)}
-              >
-                <Ionicons
-                  name="folder"
-                  size={14}
-                  color={activeFolderId === folder.id ? '#FFFFFF' : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.folderChipText,
-                    activeFolderId === folder.id && styles.folderChipTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {folder.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {folders.map((folder) => {
+              const isSelected = activeFolderId === folder.id;
+              return (
+                <View key={folder.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.folderChip,
+                      isSelected && styles.folderChipActive,
+                    ]}
+                    onPress={() => setActiveFolderId(isSelected ? null : folder.id)}
+                  >
+                    <Ionicons
+                      name="folder"
+                      size={14}
+                      color={isSelected ? '#FFFFFF' : colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.folderChipText,
+                        isSelected && styles.folderChipTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {folder.name}
+                    </Text>
+
+                    {isSelected && (
+                      <TouchableOpacity
+                        style={styles.folderDeleteBtn}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          handleDeleteFolder(folder.id, folder.name);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={13} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
 
             <TouchableOpacity
               style={styles.addFolderButton}
@@ -342,6 +377,21 @@ export default function DocumentsScreen() {
         </View>
       </Modal>
 
+      {/* Modal de Confirmação de Exclusão Universal (Documento / Pasta) */}
+      <ConfirmModal
+        visible={confirmDelete !== null}
+        title={confirmDelete?.type === 'folder' ? 'Excluir Pasta' : 'Excluir Projeto'}
+        message={
+          confirmDelete?.type === 'folder'
+            ? `Deseja realmente excluir a pasta "${confirmDelete?.name}"? Os documentos serão mantidos na biblioteca geral.`
+            : `Deseja realmente excluir permanentemente o projeto "${confirmDelete?.name}" e todas as suas páginas?`
+        }
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
       <BottomTabBar />
     </SafeAreaView>
   );
@@ -414,6 +464,12 @@ const styles = StyleSheet.create({
   },
   folderChipActive: {
     backgroundColor: colors.primary,
+  },
+  folderDeleteBtn: {
+    marginLeft: 4,
+    padding: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   folderChipText: {
     ...typography.caption,

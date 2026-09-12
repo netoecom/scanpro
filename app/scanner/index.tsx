@@ -15,7 +15,7 @@ import {
   TextInput,
   PanResponder,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
@@ -28,7 +28,9 @@ import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const { addDocument, documents } = useDocumentStore();
+  const { documentId } = useLocalSearchParams<{ documentId?: string }>();
+  const { addDocument, addPagesToDocument, documents } = useDocumentStore();
+  const targetDoc = documentId ? documents.find((d) => d.id === documentId) : null;
   const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const previewImageHeight = Math.max(300, windowHeight - 210);
@@ -136,10 +138,10 @@ export default function ScannerScreen() {
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
+        const touches = evt.nativeEvent.touches || [];
         const now = Date.now();
-        if (touches.length === 1) {
-          if (now - lastTapRef.current < 300) {
+        if (touches.length <= 1) {
+          if (now - lastTapRef.current < 320) {
             // Double tap para alternar zoom 1x <-> 2.5x
             setZoomScale((z) => {
               const next = z === 1 ? 2.5 : 1;
@@ -153,39 +155,76 @@ export default function ScannerScreen() {
             touches[0].pageX - touches[1].pageX,
             touches[0].pageY - touches[1].pageY
           );
-          initialPinchDistRef.current = dist;
+          initialPinchDistRef.current = dist > 0 ? dist : null;
           initialPinchScaleRef.current = zoomScale;
         }
       },
       onPanResponderMove: (evt, gestureState) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length >= 2 && initialPinchDistRef.current) {
+        const touches = evt.nativeEvent.touches || [];
+        if (touches.length >= 2) {
           const dist = Math.hypot(
             touches[0].pageX - touches[1].pageX,
             touches[0].pageY - touches[1].pageY
           );
+          // Se o segundo dedo tocou após o grant inicial:
+          if (!initialPinchDistRef.current || initialPinchDistRef.current === 0) {
+            initialPinchDistRef.current = dist;
+            initialPinchScaleRef.current = zoomScale;
+            return;
+          }
           const ratio = dist / initialPinchDistRef.current;
           const newScale = Math.max(
             1,
             Math.min(4, parseFloat((initialPinchScaleRef.current * ratio).toFixed(2)))
           );
           setZoomScale(newScale);
-        } else if (touches.length === 1 && zoomScale > 1) {
+          if (newScale === 1) setPanPosition({ x: 0, y: 0 });
+        } else if (touches.length <= 1 && zoomScale > 1) {
           setPanPosition((prev) => ({
-            x: Math.max(-150, Math.min(150, prev.x + gestureState.dx * 0.4)),
-            y: Math.max(-200, Math.min(200, prev.y + gestureState.dy * 0.4)),
+            x: Math.max(-180, Math.min(180, prev.x + gestureState.dx * 0.45)),
+            y: Math.max(-240, Math.min(240, prev.y + gestureState.dy * 0.45)),
           }));
         }
       },
       onPanResponderRelease: () => {
         initialPinchDistRef.current = null;
       },
+      onPanResponderTerminate: () => {
+        initialPinchDistRef.current = null;
+      },
     })
   ).current;
 
-  // Abrir diálogo de personalização do nome do documento/projeto ao salvar
-  const handleFinishScan = () => {
-    // Validação de Limite do Plano Gratuito (Fase 9)
+  // Finalizar escaneamento e salvar (em projeto existente ou criando novo)
+  const handleFinishScan = async () => {
+    const allPages = [...capturedPages];
+    if (processedResult) {
+      allPages.push(processedResult);
+    }
+
+    if (allPages.length === 0) {
+      router.replace(documentId ? (`/document/${documentId}` as any) : '/');
+      return;
+    }
+
+    // Se estamos adicionando a um documento existente, anexa diretamente sem criar nova pasta!
+    if (documentId) {
+      await addPagesToDocument(
+        documentId,
+        allPages.map((page) => ({
+          originalPath: page.originalUri,
+          processedPath: page.processedUri,
+          thumbnailPath: page.thumbnailUri,
+          width: page.width,
+          height: page.height,
+          ocrText: page.ocrText,
+        }))
+      );
+      router.replace(`/document/${documentId}` as any);
+      return;
+    }
+
+    // Validação de Limite do Plano Gratuito (Fase 9) para NOVOS documentos
     if (!isPro && documents.length >= 5) {
       Alert.alert(
         'Limite do Plano Gratuito',
@@ -201,27 +240,12 @@ export default function ScannerScreen() {
       return;
     }
 
-    const allPages = [...capturedPages];
-    if (processedResult) {
-      allPages.push(processedResult);
-    }
-
-    if (allPages.length > 0) {
-      const now = new Date();
-      const detectedTitle = allPages.find((p) => p.suggestedTitle)?.suggestedTitle;
-      const defaultTitle =
-        detectedTitle ||
-        `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-
-      setDocumentTitle(defaultTitle);
-      setIsSaveModalVisible(true);
-      return;
-    }
-
-    router.replace('/');
+    // Título padrão é sempre "Geral" conforme solicitado pelo usuário
+    setDocumentTitle('Geral');
+    setIsSaveModalVisible(true);
   };
 
-  // Efetivação do salvamento após confirmação do título
+  // Efetivação do salvamento após confirmação do título (para novo projeto)
   const executeSaveDocument = async () => {
     const allPages = [...capturedPages];
     if (processedResult) {
@@ -230,10 +254,7 @@ export default function ScannerScreen() {
 
     if (allPages.length === 0) return;
 
-    const now = new Date();
-    const finalTitle =
-      documentTitle.trim() ||
-      `Scan ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const finalTitle = documentTitle.trim() || 'Geral';
 
     setIsSaveModalVisible(false);
 
@@ -330,6 +351,16 @@ export default function ScannerScreen() {
           </View>
         </View>
 
+        {/* Banner de Destino: Adicionando a projeto existente */}
+        {targetDoc && (
+          <View style={styles.targetProjectBanner}>
+            <Ionicons name="folder-open" size={16} color="#00E5FF" />
+            <Text style={styles.targetProjectText} numberOfLines={1}>
+              Adicionando ao projeto: <Text style={{ fontWeight: '700' }}>{targetDoc.title}</Text>
+            </Text>
+          </View>
+        )}
+
         {/* Banner de Status ou Alerta de Câmera */}
         {!isCameraReady && cameraError && (
           <View style={styles.cameraErrorBanner}>
@@ -395,7 +426,9 @@ export default function ScannerScreen() {
               <Text style={styles.fullPreviewTitle}>
                 Página {capturedPages.length + 1} de {totalPagesCount}
               </Text>
-              <Text style={styles.fullPreviewSubtitle}>Revisão em Alta Definição</Text>
+              <Text style={styles.fullPreviewSubtitle}>
+                {targetDoc ? `Adicionando a: ${targetDoc.title}` : 'Revisão em Alta Definição'}
+              </Text>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.small }}>
@@ -417,7 +450,9 @@ export default function ScannerScreen() {
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.fullPreviewDoneText}>Salvar</Text>
+                <Text style={styles.fullPreviewDoneText}>
+                  {targetDoc ? 'Adicionar' : 'Salvar'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -462,6 +497,19 @@ export default function ScannerScreen() {
             {processedResult?.processedUri ? (
               <View
                 {...pinchPanResponder.panHandlers}
+                {...({
+                  onWheel: (e: any) => {
+                    if (e.ctrlKey) {
+                      e.preventDefault();
+                      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+                      setZoomScale((z) => {
+                        const next = Math.max(1, Math.min(4, parseFloat((z + delta).toFixed(2))));
+                        if (next === 1) setPanPosition({ x: 0, y: 0 });
+                        return next;
+                      });
+                    }
+                  },
+                } as any)}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -797,6 +845,30 @@ const styles = StyleSheet.create({
           overflow: 'hidden' as any,
         }
       : {}),
+  },
+  targetProjectBanner: {
+    marginHorizontal: spacing.default,
+    marginTop: spacing.small,
+    backgroundColor: 'rgba(11, 19, 36, 0.90)',
+    borderRadius: radii.capsule,
+    paddingHorizontal: spacing.default,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.45)',
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(0, 229, 255, 0.25)',
+        }
+      : {}),
+  },
+  targetProjectText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontSize: 12,
+    flex: 1,
   },
   cameraErrorBanner: {
     marginHorizontal: spacing.default,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  PanResponder,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
-import { AppButton, PageThumbnail } from '../../components/ui';
+import { AppButton, PageThumbnail, ConfirmModal } from '../../components/ui';
 import { useDocumentStore } from '../../store';
 import { DocumentPage } from '../../types';
 import { PdfService } from '../../services/pdf/pdfService';
@@ -40,6 +42,80 @@ export default function DocumentDetailScreen() {
   const [showOcrText, setShowOcrText] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(1);
   const [previewPan, setPreviewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Confirmação para exclusão de projeto ou página individual
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: 'document' | 'page';
+    pageId?: string;
+    pageIndex?: number;
+    title?: string;
+  } | null>(null);
+
+  // Refs para controle de Gesto de Pinça (Pinch to Zoom)
+  const lastTapRef = useRef<number>(0);
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialPinchScaleRef = useRef<number>(1);
+
+  // Controle aprimorado de Gesto de Pinça (Pinch to Zoom), Duplo Toque e Pan no Preview
+  const previewPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches || [];
+        const now = Date.now();
+        if (touches.length <= 1) {
+          if (now - lastTapRef.current < 320) {
+            setPreviewZoom((z) => {
+              const next = z === 1 ? 2.5 : 1;
+              if (next === 1) setPreviewPan({ x: 0, y: 0 });
+              return next;
+            });
+          }
+          lastTapRef.current = now;
+        } else if (touches.length >= 2) {
+          const dist = Math.hypot(
+            touches[0].pageX - touches[1].pageX,
+            touches[0].pageY - touches[1].pageY
+          );
+          initialPinchDistRef.current = dist > 0 ? dist : null;
+          initialPinchScaleRef.current = previewZoom;
+        }
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const touches = evt.nativeEvent.touches || [];
+        if (touches.length >= 2) {
+          const dist = Math.hypot(
+            touches[0].pageX - touches[1].pageX,
+            touches[0].pageY - touches[1].pageY
+          );
+          if (!initialPinchDistRef.current || initialPinchDistRef.current === 0) {
+            initialPinchDistRef.current = dist;
+            initialPinchScaleRef.current = previewZoom;
+            return;
+          }
+          const ratio = dist / initialPinchDistRef.current;
+          const newScale = Math.max(
+            1,
+            Math.min(4, parseFloat((initialPinchScaleRef.current * ratio).toFixed(2)))
+          );
+          setPreviewZoom(newScale);
+          if (newScale === 1) setPreviewPan({ x: 0, y: 0 });
+        } else if (touches.length <= 1 && previewZoom > 1) {
+          setPreviewPan((prev) => ({
+            x: Math.max(-200, Math.min(200, prev.x + gestureState.dx * 0.45)),
+            y: Math.max(-280, Math.min(280, prev.y + gestureState.dy * 0.45)),
+          }));
+        }
+      },
+      onPanResponderRelease: () => {
+        initialPinchDistRef.current = null;
+      },
+      onPanResponderTerminate: () => {
+        initialPinchDistRef.current = null;
+      },
+    })
+  ).current;
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSharingImages, setIsSharingImages] = useState(false);
@@ -128,42 +204,19 @@ export default function DocumentDetailScreen() {
   };
 
   const handleDeletePage = (page: DocumentPage, index: number) => {
-    Alert.alert(
-      'Excluir Página',
-      `Deseja realmente excluir a página ${index + 1}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            if (id) {
-              await deleteDocumentPage(id, page.id);
-            }
-          },
-        },
-      ]
-    );
+    setDeleteConfirmTarget({
+      type: 'page',
+      pageId: page.id,
+      pageIndex: index + 1,
+    });
   };
 
   const handleDeleteDocument = () => {
-    Alert.alert(
-      'Excluir Documento',
-      `Deseja excluir "${document.title}" permanentemente?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            if (id) {
-              await deleteDocument(id);
-              router.replace('/');
-            }
-          },
-        },
-      ]
-    );
+    if (!document) return;
+    setDeleteConfirmTarget({
+      type: 'document',
+      title: document.title,
+    });
   };
 
   const handleShareClick = () => {
@@ -244,7 +297,10 @@ export default function DocumentDetailScreen() {
   };
 
   const handleAddPage = () => {
-    router.push('/scanner' as any);
+    router.push({
+      pathname: '/scanner',
+      params: { documentId: id },
+    } as any);
   };
 
   const formattedDate = new Date(document.updatedAt).toLocaleDateString('pt-BR', {
@@ -456,13 +512,30 @@ export default function DocumentDetailScreen() {
                   </Text>
                 </ScrollView>
               ) : (
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onPress={() => {
-                    // Alterna zoom com toque duplo simples
-                    setPreviewZoom((z) => (z === 1 ? 2.2 : 1));
-                  }}
-                  style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                <View
+                  {...previewPanResponder.panHandlers}
+                  {...({
+                    onWheel: (e: any) => {
+                      if (e.ctrlKey) {
+                        e.preventDefault();
+                        const delta = e.deltaY > 0 ? -0.15 : 0.15;
+                        setPreviewZoom((z) => {
+                          const next = Math.max(1, Math.min(4, parseFloat((z + delta).toFixed(2))));
+                          if (next === 1) setPreviewPan({ x: 0, y: 0 });
+                          return next;
+                        });
+                      }
+                    },
+                  } as any)}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    touchAction: 'none',
+                    cursor: previewZoom > 1 ? 'grab' : 'default',
+                  } as any}
                 >
                   <Image
                     source={{
@@ -471,12 +544,16 @@ export default function DocumentDetailScreen() {
                     style={[
                       styles.fullPreviewImage,
                       {
-                        transform: [{ scale: previewZoom }],
+                        transform: [
+                          { scale: previewZoom },
+                          { translateX: previewPan.x },
+                          { translateY: previewPan.y },
+                        ],
                       },
                     ]}
                     resizeMode="contain"
                   />
-                </TouchableOpacity>
+                </View>
               )
             )}
           </View>
@@ -585,6 +662,36 @@ export default function DocumentDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Confirmação de Exclusão (Projeto ou Página) */}
+      <ConfirmModal
+        visible={deleteConfirmTarget !== null}
+        title={deleteConfirmTarget?.type === 'document' ? 'Excluir Projeto' : 'Excluir Página'}
+        message={
+          deleteConfirmTarget?.type === 'document'
+            ? `Deseja realmente excluir permanentemente "${deleteConfirmTarget?.title}" e todas as suas páginas?`
+            : `Deseja realmente excluir permanentemente a Página ${deleteConfirmTarget?.pageIndex}?`
+        }
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={async () => {
+          if (!deleteConfirmTarget || !id) return;
+          if (deleteConfirmTarget.type === 'document') {
+            setDeleteConfirmTarget(null);
+            await deleteDocument(id);
+            router.replace('/');
+          } else if (deleteConfirmTarget.type === 'page' && deleteConfirmTarget.pageId) {
+            const pageId = deleteConfirmTarget.pageId;
+            setDeleteConfirmTarget(null);
+            await deleteDocumentPage(id, pageId);
+            if (currentPages.length <= 1) {
+              await deleteDocument(id);
+              router.replace('/');
+            }
+          }
+        }}
+        onCancel={() => setDeleteConfirmTarget(null)}
+      />
     </SafeAreaView>
   );
 }
