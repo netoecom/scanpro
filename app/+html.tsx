@@ -45,7 +45,7 @@ export default function Root({ children }: PropsWithChildren) {
 
               if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                  navigator.serviceWorker.register('/sw.js?v=1.0.2').then(function(reg) {
                     console.log('ScanPro ServiceWorker registrado com sucesso:', reg.scope);
                   }).catch(function(err) {
                     console.warn('Falha no registro do ServiceWorker:', err);
