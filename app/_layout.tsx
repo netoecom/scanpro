@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile/index" />
         <Stack.Screen name="scanner/index" />
         <Stack.Screen name="document/[id]" />
+        <Stack.Screen name="privacy" />
       </Stack>
     </SafeAreaProvider>
   );

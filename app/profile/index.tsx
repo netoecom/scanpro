@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
 import { BottomTabBar, AppButton, OnboardingInstallModal, PaywallModal } from '../../components/ui';
@@ -21,6 +22,7 @@ import { BackupService } from '../../services/backup';
 import { TelemetryService } from '../../services/telemetry';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { documents, loadDocuments, loadFolders } = useDocumentStore();
   const {
     isPro,
@@ -409,6 +411,17 @@ export default function ProfileScreen() {
               <Text style={styles.aboutLabel}>Modo Operacional</Text>
               <Text style={styles.aboutValue}>100% Offline-Resilient</Text>
             </View>
+            <View style={styles.rowDivider} />
+            <TouchableOpacity
+              style={styles.aboutRow}
+              onPress={() => router.push('/privacy' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.aboutLabel, { color: colors.primary, fontWeight: '600' }]}>
+                Política de Privacidade
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
