@@ -16,12 +16,13 @@
       }
     },
     "android": {
-      "package": "com.scanpro.app",
+      "package": "com.scanpro.docscanner.app",
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#F5F5F7",
@@ -54,6 +55,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d8371c2d-d674-4765-b0fa-766725cacf79"
+      }
+    },
+    "owner": "netoecomapps"
   }
 }
