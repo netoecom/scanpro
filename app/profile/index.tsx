@@ -341,7 +341,7 @@ export default function ProfileScreen() {
 
         {/* Instalação do App & Permissões */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Experiência no Celular</Text>
+          <Text style={styles.sectionHeader}>Experiência & Dicas</Text>
           <View style={[styles.menuCard, shadows.card]}>
             <TouchableOpacity
               style={styles.onboardingMenuItem}
@@ -352,9 +352,9 @@ export default function ProfileScreen() {
                 <Ionicons name="sparkles" size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.onboardingMenuTitle}>Instalar App & Permissões</Text>
+                <Text style={styles.onboardingMenuTitle}>Guia de Instalação & Atalhos</Text>
                 <Text style={styles.onboardingMenuSubtitle}>
-                  Ativar em 1 clique: PWA, câmera e notificações
+                  Dicas de uso, digitalização offline e atalhos na tela de início
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
@@ -364,19 +364,19 @@ export default function ProfileScreen() {
 
         {/* Estatísticas de Uso & Produtividade */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Estatísticas de Uso</Text>
+          <Text style={styles.sectionHeader}>Estatísticas de Produtividade</Text>
           <View style={[styles.menuCard, shadows.card]}>
             <Text style={styles.telemetryDescription}>
-              Métricas de produtividade e velocidade do scanner no seu smartphone.
+              Métricas de performance e velocidade do scanner no seu smartphone.
             </Text>
             <View style={styles.telemetryGrid}>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>{funnelSummary.scannerOpens}</Text>
-                <Text style={styles.telemetryStatLabel}>Scans Feitos</Text>
+                <Text style={styles.telemetryStatLabel}>Digitalizações</Text>
               </View>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>{funnelSummary.pdfGenerated}</Text>
-                <Text style={styles.telemetryStatLabel}>PDFs Criados</Text>
+                <Text style={styles.telemetryStatLabel}>PDFs Gerados</Text>
               </View>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>
@@ -384,7 +384,7 @@ export default function ProfileScreen() {
                     ? `${(funnelSummary.averageScanToPdfMs / 1000).toFixed(1)}s`
                     : '0.8s'}
                 </Text>
-                <Text style={styles.telemetryStatLabel}>Tempo Médio</Text>
+                <Text style={styles.telemetryStatLabel}>Velocidade Média</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.clearTelemetryButton} onPress={handleClearTelemetry}>
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
           <View style={styles.menuCard}>
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Versão do Aplicativo</Text>
-              <Text style={styles.aboutValue}>1.0.0 (Build 1)</Text>
+              <Text style={styles.aboutValue}>1.0.1 (Build 2)</Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>

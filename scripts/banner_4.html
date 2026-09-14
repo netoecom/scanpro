@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Banner 4 — Compartilhe por WhatsApp e PDF HD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+    .banner-container {
+      width: 1080px; height: 1920px; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center;
+      background: radial-gradient(circle at 50% 12%, #1D4ED8 0%, #1E40AF 45%, #1E3A8A 80%, #0F172A 100%);
+    }
+    .glow-orb {
+      position: absolute; width: 850px; height: 850px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(96, 165, 250, 0.3) 0%, rgba(29, 78, 216, 0.15) 50%, transparent 75%);
+      top: -150px; left: 115px; pointer-events: none; filter: blur(40px);
+    }
+    .subtle-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 60px 60px; pointer-events: none;
+    }
+    .header-content {
+      margin-top: 130px; text-align: center; z-index: 5; padding: 0 60px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .badge-pill {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.35); color: #FFFFFF;
+      font-size: 26px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 14px 34px; border-radius: 999px; margin-bottom: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .main-title {
+      font-size: 104px; line-height: 1.05; font-weight: 900; color: #FFFFFF;
+      letter-spacing: -2px; text-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+    .subtitle {
+      margin-top: 24px; font-size: 46px; line-height: 1.25; font-weight: 600;
+      color: rgba(255, 255, 255, 0.94); max-width: 960px;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+    }
+    .device-mockup {
+      position: absolute; bottom: 85px; width: 840px; height: 1140px;
+      background: #000000; border-radius: 64px 64px 50px 50px;
+      box-shadow: 0 35px 90px rgba(0, 0, 0, 0.85), 0 0 0 12px #1E293B, 0 0 0 16px #334155, 0 0 0 22px #0F172A;
+      overflow: hidden; display: flex; flex-direction: column; z-index: 4;
+    }
+    .device-statusbar {
+      height: 48px; background: rgba(0, 0, 0, 0.6); display: flex;
+      justify-content: space-between; align-items: center; padding: 0 44px;
+      color: #FFFFFF; font-size: 20px; font-weight: 600; z-index: 10;
+    }
+    .device-notch {
+      width: 16px; height: 16px; border-radius: 50%; background: #111;
+      box-shadow: inset 0 0 3px rgba(255,255,255,0.2);
+    }
+    .screen-body { flex: 1; position: relative; background: #0F172A; display: flex; flex-direction: column; }
+    
+    .top-header-bar {
+      padding: 20px 32px; background: #FFFFFF; display: flex;
+      justify-content: space-between; align-items: center; color: #0F172A;
+      border-bottom: 1px solid #E2E8F0;
+    }
+    
+    .back-content-faded {
+      flex: 1; background: #F1F5F9; padding: 24px 32px; opacity: 0.45;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .dummy-card {
+      height: 140px; background: #FFFFFF; border-radius: 16px; border: 1px solid #CBD5E1;
+    }
+    
+    .share-sheet {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: #FFFFFF; border-radius: 36px 36px 0 0;
+      padding: 36px 36px 44px 36px; display: flex; flex-direction: column; gap: 20px;
+      box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.35); z-index: 8;
+    }
+    .sheet-handle {
+      width: 56px; height: 6px; border-radius: 999px; background: #CBD5E1;
+      align-self: center; margin-bottom: 8px;
+    }
+    .sheet-title {
+      font-size: 26px; font-weight: 900; color: #0F172A;
+    }
+    
+    .share-btn-row {
+      display: flex; align-items: center; gap: 20px; padding: 20px 24px;
+      border-radius: 20px; border: 1.5px solid #E2E8F0; background: #FFFFFF;
+    }
+    .share-btn-row.featured {
+      background: #EFF6FF; border-color: #93C5FD;
+      box-shadow: 0 8px 20px rgba(0, 122, 255, 0.12);
+    }
+    .share-btn-row.whatsapp {
+      background: #F0FDF4; border-color: #86EFAC;
+    }
+    
+    .icon-box {
+      width: 62px; height: 62px; border-radius: 18px; display: flex;
+      align-items: center; justify-content: center; font-size: 30px;
+    }
+    .info-col {
+      flex: 1; display: flex; flex-direction: column; gap: 4px;
+    }
+    .info-title {
+      font-size: 21px; font-weight: 800; color: #0F172A;
+    }
+    .info-sub {
+      font-size: 15px; font-weight: 500; color: #64748B;
+    }
+    .arrow-icon {
+      font-size: 24px; font-weight: 800; color: #94A3B8;
+    }
+    
+    .features-pill-row {
+      position: absolute; bottom: 22px; display: flex; gap: 16px; z-index: 10;
+    }
+    .feature-item-pill {
+      display: flex; align-items: center; gap: 8px; background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px); padding: 10px 22px; border-radius: 999px;
+      color: #FFFFFF; font-size: 19px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+  </style>
+</head>
+<body>
+  <div class="banner-container">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        💬 Envio Seletivo em 1 Clique
+      </div>
+      <h1 class="main-title">Compartilhe</h1>
+      <p class="subtitle">Envie por WhatsApp, e-mail ou nuvem em PDF de Alta Definição</p>
+    </div>
+
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="top-header-bar">
+          <span style="font-size: 22px; font-weight: 800;">← Relatório Financeiro</span>
+          <span style="background: #EFF6FF; color: #007AFF; font-weight: 800; font-size: 15px; padding: 6px 14px; border-radius: 8px;">3 Páginas (HD)</span>
+        </div>
+
+        <div class="back-content-faded">
+          <div class="dummy-card"></div>
+          <div class="dummy-card"></div>
+        </div>
+
+        <div class="share-sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-title">Opções de Compartilhamento</div>
+
+          <div class="share-btn-row featured">
+            <div class="icon-box" style="background: #007AFF; color: #FFF;">
+              📄
+            </div>
+            <div class="info-col">
+              <div class="info-title" style="color: #007AFF;">Compartilhar PDF (HD)</div>
+              <div class="info-sub">Documento completo em alta resolução (0.24 MB)</div>
+            </div>
+            <span class="arrow-icon" style="color: #007AFF;">→</span>
+          </div>
+
+          <div class="share-btn-row whatsapp">
+            <div class="icon-box" style="background: #22C55E; color: #FFF;">
+              💬
+            </div>
+            <div class="info-col">
+              <div class="info-title" style="color: #15803D;">Enviar no WhatsApp</div>
+              <div class="info-sub">PDF ou imagens direto na conversa ou grupo</div>
+            </div>
+            <span class="arrow-icon" style="color: #22C55E;">→</span>
+          </div>
+
+          <div class="share-btn-row">
+            <div class="icon-box" style="background: #F1F5F9; color: #0F172A; border: 1px solid #CBD5E1;">
+              🖼️
+            </div>
+            <div class="info-col">
+              <div class="info-title">Exportar como Imagens (JPG)</div>
+              <div class="info-sub">Páginas selecionadas sem compressão destrutiva</div>
+            </div>
+            <span class="arrow-icon">→</span>
+          </div>
+
+          <div class="share-btn-row">
+            <div class="icon-box" style="background: #FEF3C7; color: #D97706;">
+              🎯
+            </div>
+            <div class="info-col">
+              <div class="info-title">Envio Seletivo de Páginas</div>
+              <div class="info-sub">Escolha quais páginas enviar sem recriar o arquivo</div>
+            </div>
+            <span class="arrow-icon">→</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">💬 Direto no WhatsApp</div>
+      <div class="feature-item-pill">📄 PDF em Alta Definição</div>
+      <div class="feature-item-pill">⚡ Envio Instantâneo</div>
+    </div>
+  </div>
+</body>
+</html>

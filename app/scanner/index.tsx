@@ -15,12 +15,12 @@ import {
   TextInput,
   PanResponder,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
 import { AppButton, PageStrip, PaywallModal } from '../../components/ui';
-import { CaptureButton, ScannerOverlay, WebCameraView, CropEditorModal } from '../../components/scanner';
+import { CaptureButton, ScannerOverlay, WebCameraView, CropEditorModal, CameraErrorBoundary } from '../../components/scanner';
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore, usePremiumStore } from '../../store';
 import { TelemetryService } from '../../services/telemetry';
@@ -28,6 +28,7 @@ import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const { addDocument, addPagesToDocument, documents } = useDocumentStore();
   const targetDoc = documentId ? documents.find((d) => d.id === documentId) : null;
@@ -48,6 +49,24 @@ export default function ScannerScreen() {
   const initialPinchDistRef = useRef<number | null>(null);
   const initialPinchScaleRef = useRef<number>(1);
 
+  // Estados de proteção de ciclo de vida contra crash nativo no Android (Motorola/CameraX)
+  const [isMountDelayPassed, setIsMountDelayPassed] = useState(false);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+
+  // Garante que a animação nativa de transição de tela do Android conclua 100% antes de inicializar o sensor
+  React.useEffect(() => {
+    if (!isFocused) {
+      setIsMountDelayPassed(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsMountDelayPassed(true);
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [isFocused]);
+
   React.useEffect(() => {
     TelemetryService.track('scanner_opened');
     TelemetryService.startScanTrace();
@@ -57,6 +76,7 @@ export default function ScannerScreen() {
     cameraRef,
     webCameraRef,
     status,
+    isPermissionLoading,
     hasPermission,
     requestPermission,
     flash,
@@ -71,6 +91,7 @@ export default function ScannerScreen() {
     confidence,
     activeCorners,
     captureDocument,
+    launchNativeCamera,
     pickFromGallery,
     changeFilterMode,
     applyCustomCrop,
@@ -83,6 +104,18 @@ export default function ScannerScreen() {
     retakeCurrentPage,
     resetScanner,
   } = useScannerEngine();
+
+  // Tela de Carregamento de Inicialização da Câmera
+  if (isPermissionLoading) {
+    return (
+      <SafeAreaView style={styles.permissionContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.permissionDescription, { marginTop: spacing.default, color: '#FFFFFF' }]}>
+          Iniciando câmera...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   // Tela de Permissão de Câmera
   if (hasPermission === false) {
@@ -103,7 +136,13 @@ export default function ScannerScreen() {
             style={styles.permissionButton}
           />
           <AppButton
-            title="Voltar"
+            title="Escolher Foto da Galeria"
+            onPress={pickFromGallery}
+            variant="secondary"
+            style={{ marginTop: spacing.small, width: '100%' }}
+          />
+          <AppButton
+            title="Voltar ao Início"
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
             variant="tertiary"
             style={{ marginTop: spacing.small }}
@@ -277,25 +316,53 @@ export default function ScannerScreen() {
   const totalPagesCount = capturedPages.length + (processedResult ? 1 : 0);
 
   return (
-    <View style={styles.container}>
-      {/* Visualizador da Câmera (HTML5 no Web/PWA, CameraView no Mobile Nativo) */}
-      {Platform.OS === 'web' ? (
-        <WebCameraView
-          ref={webCameraRef}
-          facing={facing}
-          onCameraReady={handleCameraReady}
-          onMountError={handleMountError}
-        />
-      ) : (
-        <CameraView
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          facing={facing}
-          enableTorch={flash === 'on'}
-          onCameraReady={handleCameraReady}
-          onMountError={handleMountError}
-        />
-      )}
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) {
+          setContainerSize({ width, height });
+        }
+      }}
+    >
+      {/* Visualizador Seguro da Câmera com Error Boundary contra falhas de hardware */}
+      <CameraErrorBoundary
+        onRetry={resetScanner}
+        onLaunchNativeCamera={launchNativeCamera}
+        onPickFromGallery={pickFromGallery}
+        onGoBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      >
+        {Platform.OS === 'web' ? (
+          <WebCameraView
+            ref={webCameraRef}
+            facing={facing}
+            onCameraReady={handleCameraReady}
+            onMountError={handleMountError}
+          />
+        ) : isFocused && isMountDelayPassed && containerSize && containerSize.width > 0 ? (
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing={facing}
+            mode="picture"
+            mute={true}
+            ratio="4:3"
+            autofocus="on"
+            animateShutter={false}
+            enableTorch={flash === 'on'}
+            onCameraReady={handleCameraReady}
+            onMountError={(err) => {
+              console.warn('Erro de montagem da câmera:', err);
+              handleMountError(err);
+            }}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.cameraPlaceholderText}>Calibrando sensor de alta definição...</Text>
+          </View>
+        )}
+      </CameraErrorBoundary>
 
       {/* Camada de Overlay e Detecção Visual com Efeito Laser Transitório */}
       <ScannerOverlay
@@ -317,6 +384,18 @@ export default function ScannerScreen() {
           </TouchableOpacity>
 
           <View style={styles.topRightControls}>
+            {/* Botão Câmera Nativa do Celular (100% de compatibilidade em qualquer Android) */}
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity
+                style={styles.circleButton}
+                onPress={launchNativeCamera}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Abrir Câmera do Celular"
+              >
+                <Ionicons name="camera" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+
             {/* Botão de Alternar Câmera (Frontal / Traseira) */}
             <TouchableOpacity
               style={styles.circleButton}
@@ -351,6 +430,19 @@ export default function ScannerScreen() {
           </View>
         </View>
 
+        {/* Banner de Contingência se a câmera embutida reportar qualquer restrição */}
+        {cameraError && (
+          <View style={styles.cameraErrorBanner}>
+            <Ionicons name="warning-outline" size={20} color="#FBBF24" style={{ marginRight: 8 }} />
+            <Text style={styles.cameraErrorBannerText} numberOfLines={2}>
+              {cameraError}
+            </Text>
+            <TouchableOpacity style={styles.cameraErrorBannerBtn} onPress={launchNativeCamera}>
+              <Text style={styles.cameraErrorBannerBtnText}>Câmera do Celular</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Banner de Destino: Adicionando a projeto existente */}
         {targetDoc && (
           <View style={styles.targetProjectBanner}>
@@ -358,14 +450,6 @@ export default function ScannerScreen() {
             <Text style={styles.targetProjectText} numberOfLines={1}>
               Adicionando ao projeto: <Text style={{ fontWeight: '700' }}>{targetDoc.title}</Text>
             </Text>
-          </View>
-        )}
-
-        {/* Banner de Status ou Alerta de Câmera */}
-        {!isCameraReady && cameraError && (
-          <View style={styles.cameraErrorBanner}>
-            <Ionicons name="information-circle-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.cameraErrorText}>{cameraError}</Text>
           </View>
         )}
 
@@ -873,20 +957,33 @@ const styles = StyleSheet.create({
   cameraErrorBanner: {
     marginHorizontal: spacing.default,
     marginTop: spacing.small,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
     borderRadius: radii.standard,
-    paddingHorizontal: spacing.compact,
-    paddingVertical: spacing.small,
+    padding: spacing.compact,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.small,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+    zIndex: 20,
   },
-  cameraErrorText: {
+  cameraErrorBannerText: {
+    ...typography.caption,
+    color: '#F8FAFC',
+    flex: 1,
+    fontSize: 13,
+  },
+  cameraErrorBannerBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.capsule,
+    marginLeft: 8,
+  },
+  cameraErrorBannerBtnText: {
     ...typography.caption,
     color: '#FFFFFF',
-    flex: 1,
+    fontWeight: '700',
+    fontSize: 12,
   },
   controlsSafeArea: {
     flex: 1,
@@ -1312,5 +1409,17 @@ const styles = StyleSheet.create({
   saveModalActions: {
     flexDirection: 'row',
     gap: spacing.small,
+  },
+  cameraPlaceholder: {
+    backgroundColor: '#020617',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  cameraPlaceholderText: {
+    ...typography.caption,
+    color: '#94A3B8',
+    marginTop: spacing.default,
+    fontWeight: '600',
   },
 });

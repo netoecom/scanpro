@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>ScanPro — Gerador de Mockups Play Store (1080x1920)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: #0B0F19;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      gap: 60px;
+    }
+
+    .banner-container {
+      width: 1080px;
+      height: 1920px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      flex-shrink: 0;
+    }
+
+    /* Temas de Fundo Baseados no Design System ScanPro (Azul Royal Vibrante + Deep Indigo) */
+    .bg-gradient-blue {
+      background: radial-gradient(circle at 50% 15%, #007AFF 0%, #0055D4 45%, #002B7A 85%, #001845 100%);
+    }
+    .bg-gradient-cyan {
+      background: radial-gradient(circle at 50% 15%, #0284C7 0%, #0369A1 45%, #075985 75%, #0C4A6E 100%);
+    }
+    .bg-gradient-purple {
+      background: radial-gradient(circle at 50% 15%, #4F46E5 0%, #3730A3 45%, #312E81 80%, #1E1B4B 100%);
+    }
+    .bg-gradient-darkblue {
+      background: radial-gradient(circle at 50% 15%, #2563EB 0%, #1D4ED8 40%, #1E3A8A 80%, #0F172A 100%);
+    }
+    .bg-gradient-emerald {
+      background: radial-gradient(circle at 50% 15%, #0D9488 0%, #0F766E 45%, #115E59 80%, #134E4A 100%);
+    }
+
+    /* Padrões geométricos sutis de tecnologia de escaneamento */
+    .glow-orb {
+      position: absolute;
+      width: 800px;
+      height: 800px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.22) 0%, rgba(0, 122, 255, 0.1) 50%, transparent 75%);
+      top: -150px;
+      left: 140px;
+      pointer-events: none;
+      filter: blur(40px);
+    }
+
+    .subtle-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    /* Cabeçalho de Texto de Alto Impacto */
+    .header-content {
+      margin-top: 130px;
+      text-align: center;
+      z-index: 5;
+      padding: 0 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      color: #FFFFFF;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 12px 32px;
+      border-radius: 999px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .badge-pill svg {
+      width: 28px;
+      height: 28px;
+      fill: #00E5FF;
+    }
+
+    .main-title {
+      font-size: 96px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: #FFFFFF;
+      letter-spacing: -2px;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .subtitle {
+      margin-top: 24px;
+      font-size: 46px;
+      line-height: 1.25;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.92);
+      max-width: 960px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Mockup do Smartphone Realista */
+    .device-mockup {
+      position: absolute;
+      bottom: -60px;
+      width: 820px;
+      height: 1220px;
+      background: #000000;
+      border-radius: 68px 68px 0 0;
+      box-shadow: 
+        0 40px 100px rgba(0, 0, 0, 0.8),
+        0 0 0 14px #1E293B,
+        0 0 0 16px #475569,
+        0 0 0 22px #0F172A;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      z-index: 4;
+    }
+
+    /* Barra Superior do Aparelho (Status Bar) */
+    .device-statusbar {
+      height: 48px;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 44px;
+      color: #FFFFFF;
+      font-size: 20px;
+      font-weight: 600;
+      z-index: 10;
+    }
+
+    .device-notch {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #111;
+      box-shadow: inset 0 0 3px rgba(255,255,255,0.2);
+    }
+
+    /* Conteúdo da Tela do Smartphone */
+    .screen-body {
+      flex: 1;
+      position: relative;
+      background: #F8FAFC;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ========================================================== */
+    /* TELAS ESPECÍFICAS DE CADA BANNER                          */
+    /* ========================================================== */
+
+    /* BANNER 1: SCANNER COM DETECÇÃO E LINHA DIAGONAL ANTES/DEPOIS */
+    .scanner-view-full {
+      position: absolute;
+      inset: 0;
+      background: #020617;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .scanner-top-bar {
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 8;
+    }
+
+    .icon-btn-round {
+      width: 60px;
+      height: 60px;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+    }
+
+    .scanner-document-preview-split {
+      position: absolute;
+      top: 110px;
+      left: 70px;
+      right: 70px;
+      bottom: 230px;
+      background: #1E293B;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Folha com diagonal de divisão Antes/Depois */
+    .doc-before-after-wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #E2E8F0;
+    }
+
+    .doc-side-raw {
+      position: absolute;
+      inset: 0;
+      background: #CBD5E1;
+      display: flex;
+      flex-direction: column;
+      padding: 40px 50px;
+      filter: contrast(0.85) brightness(0.9);
+      transform: rotate(-1.5deg) scale(0.96);
+    }
+
+    .doc-side-clean {
+      position: absolute;
+      inset: 0;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      padding: 40px 50px;
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+      box-shadow: -5px -5px 25px rgba(0,0,0,0.1);
+    }
+
+    /* Linha verde/ciano de corte diagonal como no CamScanner */
+    .split-cut-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      pointer-events: none;
+      background: linear-gradient(to top left, transparent calc(50% - 3px), #00E5FF calc(50% - 3px), #007AFF calc(50% + 3px), transparent calc(50% + 3px));
+      z-index: 7;
+      filter: drop-shadow(0 0 10px #00E5FF);
+    }
+
+    .tag-before {
+      position: absolute;
+      top: 35px;
+      left: 35px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #94A3B8;
+      font-size: 20px;
+      font-weight: 700;
+      padding: 8px 20px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .tag-after {
+      position: absolute;
+      bottom: 35px;
+      right: 35px;
+      background: #007AFF;
+      color: #FFFFFF;
+      font-size: 22px;
+      font-weight: 800;
+      padding: 10px 24px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: 0 6px 18px rgba(0, 122, 255, 0.5);
+      z-index: 8;
+    }
+
+    /* Simulação de texto de contrato real */
+    .doc-header-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 20px;
+      text-align: center;
+      text-transform: uppercase;
+      border-bottom: 2px solid #007AFF;
+      padding-bottom: 12px;
+    }
+
+    .doc-text-paragraph {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #334155;
+      margin-bottom: 16px;
+      text-align: justify;
+    }
+
+    /* Barra Inferior do Scanner */
+    .scanner-bottom-bar {
+      height: 190px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 60px;
+      z-index: 8;
+    }
+
+    .shutter-btn-large {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 6px solid #FFFFFF;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shutter-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: #007AFF;
+      box-shadow: 0 0 25px rgba(0, 122, 255, 0.8);
+    }
+
+    /* BANNER 2: FILTROS MÁGICOS */
+    .filter-bar-docked {
+      position: absolute;
+      bottom: 60px;
+      left: 30px;
+      right: 30px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
+      padding: 22px 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.5);
+      z-index: 10;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .filter-tab-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .filter-thumb-box {
+      width: 100%;
+      height: 90px;
+      background: #1E293B;
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid transparent;
+      padding: 6px;
+    }
+
+    .filter-thumb-box.active {
+      border-color: #00E5FF;
+      background: #0F172A;
+      box-shadow: 0 0 16px rgba(0, 229, 255, 0.4);
+    }
+
+    .filter-name-label {
+      color: #94A3B8;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .filter-name-label.active {
+      color: #00E5FF;
+    }
+
+    /* BANNER 3: DOCUMENTOS PESSOAIS (RG / CNH FRENTE E VERSO) */
+    .id-cards-sheet {
+      position: absolute;
+      top: 70px;
+      left: 80px;
+      right: 80px;
+      bottom: 80px;
+      background: #FFFFFF;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+    }
+
+    .id-card-frame {
+      width: 100%;
+      height: 380px;
+      background: #ECFDF5;
+      border: 3px solid #10B981;
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(16, 185, 129, 0.18);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 30px;
+    }
+
+    .id-card-tag {
+      position: absolute;
+      top: 18px;
+      right: 20px;
+      background: #10B981;
+      color: #FFFFFF;
+      font-size: 15px;
+      font-weight: 800;
+      padding: 6px 14px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+
+    .id-header-brasao {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .brasao-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: #059669;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .id-content-grid {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .id-photo-placeholder {
+      width: 120px;
+      height: 160px;
+      background: #D1FAE5;
+      border: 2px solid #34D399;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #059669;
+    }
+
+    .id-fields-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .id-field-line {
+      background: #A7F3D0;
+      height: 16px;
+      border-radius: 4px;
+      width: 85%;
+    }
+
+    /* BANNER 4: COMPARTILHAMENTO / WHATSAPP / MODAL */
+    .share-modal-card {
+      position: absolute;
+      bottom: 80px;
+      left: 50px;
+      right: 50px;
+      background: #FFFFFF;
+      border-radius: 36px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+      padding: 40px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      z-index: 12;
+      border: 1px solid #E2E8F0;
+    }
+
+    .share-modal-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 4px;
+    }
+
+    .share-option-row {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 18px 20px;
+      background: #F8FAFC;
+      border-radius: 20px;
+      border: 1px solid #E2E8F0;
+    }
+
+    .share-icon-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    /* BANNER 5: PASTAS E BIBLIOTECA */
+    .library-screen-content {
+      padding: 40px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .library-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .library-title {
+      font-size: 40px;
+      font-weight: 900;
+      color: #0F172A;
+    }
+
+    .folder-grid-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .folder-card-widget {
+      background: #FFFFFF;
+      border-radius: 24px;
+      padding: 26px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      border: 1px solid #E2E8F0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .folder-icon-large {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      background: #EFF6FF;
+      color: #007AFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+    }
+
+    .folder-title-text {
+      font-size: 24px;
+      font-weight: 800;
+      color: #1E293B;
+    }
+
+    .folder-count-text {
+      font-size: 16px;
+      font-weight: 600;
+      color: #64748B;
+    }
+
+    /* Rodapé com Destaque de Vantagens (Diferenciais) */
+    .features-pill-row {
+      position: absolute;
+      bottom: 40px;
+      display: flex;
+      gap: 20px;
+      z-index: 10;
+    }
+
+    .feature-item-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      padding: 10px 24px;
+      border-radius: 999px;
+      color: #FFFFFF;
+      font-size: 20px;
+      font-weight: 700;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================== -->
+  <!-- BANNER 1: DIGITALIZAÇÃO COM DETECÇÃO AUTOMÁTICA             -->
+  <!-- ========================================================== -->
+  <div class="banner-container bg-gradient-blue" id="banner-1">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        <svg viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+        Detecção Inteligente Instantânea
+      </div>
+      <h1 class="main-title">Digitalize</h1>
+      <p class="subtitle">Enquadramento automático com correção de bordas e perspectiva</p>
+    </div>
+
+    <!-- Smartphone Mockup -->
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="scanner-view-full">
+          <div class="scanner-top-bar">
+            <div class="icon-btn-round">✕</div>
+            <div style="background: rgba(0,229,255,0.25); border: 1px solid #00E5FF; padding: 8px 24px; border-radius: 999px; color: #00E5FF; font-weight: 800; font-size: 16px;">AUTO-CAPTURE</div>
+            <div class="icon-btn-round">⚡</div>
+          </div>
+
+          <!-- Documento com Split Antes / Depois -->
+          <div class="scanner-document-preview-split">
+            <div class="doc-before-after-wrap">
+              <!-- Lado Antes (Foto Crua Inclinada) -->
+              <div class="doc-side-raw">
+                <div class="tag-before">Original da Câmera</div>
+                <div class="doc-header-title" style="opacity: 0.6;">Contrato de Prestação de Serviços</div>
+                <div class="doc-text-paragraph" style="opacity: 0.5;">Pelo presente instrumento particular, as partes qualificadas formalizam o acordo de serviços profissionais com total confidencialidade e segurança...</div>
+                <div class="doc-text-paragraph" style="opacity: 0.5;">Fica acordado o fornecimento contínuo de tecnologia scanner móvel de alta definição com processamento direto no hardware do aparelho.</div>
+              </div>
+
+              <!-- Lado Depois (Digitalizado, Branco Puro, Alta Nitidez) -->
+              <div class="doc-side-clean">
+                <div class="tag-after">Digitalizado ScanPro ✨</div>
+                <div class="doc-header-title">Contrato de Prestação de Serviços</div>
+                <div class="doc-text-paragraph">Pelo presente instrumento particular, as partes qualificadas formalizam o acordo de serviços profissionais com total confidencialidade e segurança...</div>
+                <div class="doc-text-paragraph">Fica acordado o fornecimento contínuo de tecnologia scanner móvel de alta definição com processamento direto no hardware do aparelho.</div>
+                <div class="doc-text-paragraph" style="font-weight: 700; color: #007AFF;">Parágrafo 1º: Todos os documentos são protegidos com padrão Local-First e zero compartilhamento com terceiros.</div>
+              </div>
+
+              <!-- Linha de Corte Diagonal Ciano Laser -->
+              <div class="split-cut-line"></div>
+            </div>
+          </div>
+
+          <!-- Controles Inferiores do Scanner -->
+          <div class="scanner-bottom-bar">
+            <div style="color: #FFFFFF; font-size: 18px; font-weight: 700;">🖼️ Galeria</div>
+            <div class="shutter-btn-large">
+              <div class="shutter-inner"></div>
+            </div>
+            <div style="color: #00E5FF; font-size: 18px; font-weight: 800;">1 Página</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">🔒 100% Local-First</div>
+      <div class="feature-item-pill">⚡ Sem Espera</div>
+      <div class="feature-item-pill">🚫 Sem Marcas d'Água</div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================== -->
+  <!-- BANNER 2: FILTROS MÁGICOS E OTIMIZAÇÃO DE NITIDEZ          -->
+  <!-- ========================================================== -->
+  <div class="banner-container bg-gradient-cyan" id="banner-2">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        <svg viewBox="0 0 24 24"><path d="M12 3V21M3 12H21"/></svg>
+        Qualidade de Scanner de Mesa
+      </div>
+      <h1 class="main-title">Otimize</h1>
+      <p class="subtitle">Filtros mágicos para contratos, livros, recibos e anotações</p>
+    </div>
+
+    <!-- Smartphone Mockup -->
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div style="padding: 24px 32px; background: #0F172A; display: flex; justify-content: space-between; align-items: center; color: #FFFFFF;">
+          <span style="font-size: 24px;">←</span>
+          <span style="font-size: 20px; font-weight: 800;">Revisão em Alta Definição</span>
+          <span style="color: #00E5FF; font-weight: 800; font-size: 20px;">Salvar</span>
+        </div>
+
+        <!-- Documento Otimizado em Tela Cheia -->
+        <div style="flex: 1; background: #E2E8F0; padding: 24px; display: flex; justify-content: center;">
+          <div style="width: 90%; background: #FFFFFF; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.15); padding: 36px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #E2E8F0; padding-bottom: 16px; margin-bottom: 20px;">
+              <span style="font-weight: 800; font-size: 22px; color: #007AFF;">DECLARAÇÃO OFICIAL</span>
+              <span style="font-weight: 700; font-size: 16px; color: #64748B;">Nº 4829/2026</span>
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #0F172A; margin-bottom: 16px; font-weight: 500;">
+              Certificamos para os devidos fins que o presente documento foi processado através de filtros inteligentes de remoção de sombras e realce de tipografia.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #0F172A; margin-bottom: 20px; font-weight: 500;">
+              O texto apresenta contraste ideal para leitura humana, arquivamento fiscal e reconhecimento ótico de caracteres (OCR) instantâneo.
+            </p>
+            <div style="background: #F8FAFC; border: 1px dashed #007AFF; padding: 14px; border-radius: 8px; font-size: 14px; color: #007AFF; font-weight: 700;">
+              ✓ Bordas recortadas com precisão milimétrica • Texto nítido
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra Flutuante de Filtros -->
+        <div class="filter-bar-docked">
+          <div class="filter-tab-item">
+            <div class="filter-thumb-box active">
+              <span style="font-size: 24px;">✨</span>
+            </div>
+            <span class="filter-name-label active">Mágico</span>
+          </div>
+          <div class="filter-tab-item">
+            <div class="filter-thumb-box">
+              <span style="font-size: 24px;">📄</span>
+            </div>
+            <span class="filter-name-label">P&B Nítido</span>
+          </div>
+          <div class="filter-tab-item">
+            <div class="filter-thumb-box">
+              <span style="font-size: 24px;">🔘</span>
+            </div>
+            <span class="filter-name-label">Cinza</span>
+          </div>
+          <div class="filter-tab-item">
+            <div class="filter-thumb-box">
+              <span style="font-size: 24px;">🎨</span>
+            </div>
+            <span class="filter-name-label">Cores Vivas</span>
+          </div>
+          <div class="filter-tab-item">
+            <div class="filter-thumb-box">
+              <span style="font-size: 24px;">📷</span>
+            </div>
+            <span class="filter-name-label">Original</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">✨ Remoção de Sombras</div>
+      <div class="feature-item-pill">🖨️ Contraste de Impressão</div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================== -->
+  <!-- BANNER 3: DOCUMENTOS PESSOAIS (RG / CNH / IDENTIDADE)       -->
+  <!-- ========================================================== -->
+  <div class="banner-container bg-gradient-purple" id="banner-3">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z"/></svg>
+        Frente e Verso Perfeitos
+      </div>
+      <h1 class="main-title">Carteira de Identidade</h1>
+      <p class="subtitle">Digitalize RG, CNH e Passaporte alinhados em 1 página pronta</p>
+    </div>
+
+    <!-- Smartphone Mockup -->
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body" style="background: #F1F5F9;">
+        <div class="id-cards-sheet">
+          <!-- Frente do RG -->
+          <div class="id-card-frame">
+            <div class="id-card-tag">Frente (RG / CNH)</div>
+            <div class="id-header-brasao">
+              <div class="brasao-icon">BR</div>
+              <div>
+                <div style="font-size: 16px; font-weight: 800; color: #065F46;">REPÚBLICA FEDERATIVA DO BRASIL</div>
+                <div style="font-size: 12px; font-weight: 600; color: #047857;">REGISTRO GERAL DE IDENTIDADE CIVIL</div>
+              </div>
+            </div>
+            <div class="id-content-grid">
+              <div class="id-photo-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              </div>
+              <div class="id-fields-col">
+                <div style="font-size: 12px; font-weight: 700; color: #065F46;">NOME COMPLETO</div>
+                <div class="id-field-line" style="width: 95%;"></div>
+                <div style="font-size: 12px; font-weight: 700; color: #065F46; margin-top: 4px;">REGISTRO GERAL (RG)</div>
+                <div class="id-field-line" style="width: 70%;"></div>
+                <div style="font-size: 12px; font-weight: 700; color: #065F46; margin-top: 4px;">DATA DE NASCIMENTO / NATURALIDADE</div>
+                <div class="id-field-line" style="width: 80%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verso do RG -->
+          <div class="id-card-frame">
+            <div class="id-card-tag" style="background: #0D9488;">Verso Oficial</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 800; color: #115E59;">POLEGAR DIREITO</span>
+              <span style="font-size: 13px; font-weight: 700; color: #0F766E;">SECRETARIA DE SEGURANÇA PÚBLICA</span>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+              <div style="width: 100px; height: 130px; background: #CCFBF1; border: 2px dashed #14B8A6; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 30px;">
+                👆
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div class="id-field-line" style="background: #99F6E4; width: 100%;"></div>
+                <div class="id-field-line" style="background: #99F6E4; width: 85%;"></div>
+                <div class="id-field-line" style="background: #99F6E4; width: 90%;"></div>
+                <div style="height: 24px; background: #134E4A; border-radius: 4px; margin-top: 6px; width: 95%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">🪪 RG & CNH Prontos</div>
+      <div class="feature-item-pill">🛡️ Dados Criptografados</div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================== -->
+  <!-- BANNER 4: COMPARTILHAMENTO SELETIVO E WHATSAPP             -->
+  <!-- ========================================================== -->
+  <div class="banner-container bg-gradient-darkblue" id="banner-4">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        <svg viewBox="0 0 24 24"><path d="M18 16.08C17.24 16.08 16.56 16.38 16.04 16.85L8.91 12.7C8.96 12.47 9 12.24 9 12C9 11.76 8.96 11.53 8.91 11.3L15.96 7.19C16.5 7.69 17.21 8 18 8C19.66 8 21 6.66 21 5C21 3.34 19.66 2 18 2C16.34 2 15 3.34 15 5C15 5.24 15.04 5.47 15.09 5.7L8.04 9.81C7.5 9.31 6.79 9 6 9C4.34 9 3 10.34 3 12C3 13.66 4.34 15 6 15C6.79 15 7.5 14.69 8.04 14.19L15.16 18.35C15.11 18.56 15.08 18.78 15.08 19C15.08 20.61 16.39 21.92 18 21.92C19.61 21.92 20.92 20.61 20.92 19C20.92 17.39 19.61 16.08 18 16.08Z"/></svg>
+        Envio Seletivo em 1 Clique
+      </div>
+      <h1 class="main-title">Compartilhe</h1>
+      <p class="subtitle">Envie por WhatsApp, e-mail ou nuvem em PDF de Alta Definição</p>
+    </div>
+
+    <!-- Smartphone Mockup -->
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div style="padding: 24px 32px; background: #FFFFFF; border-bottom: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 24px; font-weight: 700; color: #0F172A;">← Contrato Final</span>
+          <span style="background: #EFF6FF; color: #007AFF; font-weight: 800; font-size: 16px; padding: 6px 14px; border-radius: 8px;">3 Páginas</span>
+        </div>
+
+        <div style="flex: 1; background: #F1F5F9; padding: 24px; opacity: 0.6;">
+          <div style="height: 180px; background: #FFFFFF; border-radius: 16px; margin-bottom: 16px;"></div>
+          <div style="height: 180px; background: #FFFFFF; border-radius: 16px;"></div>
+        </div>
+
+        <!-- Modal de Compartilhamento Elegante -->
+        <div class="share-modal-card">
+          <div class="share-modal-title">Como deseja compartilhar?</div>
+
+          <div class="share-option-row" style="background: #EFF6FF; border-color: #BFDBFE;">
+            <div class="share-icon-circle" style="background: #007AFF; color: #FFFFFF;">
+              📄
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 22px; font-weight: 800; color: #007AFF;">Compartilhar PDF (HD)</div>
+              <div style="font-size: 16px; color: #475569; margin-top: 2px;">Documento completo em alta resolução</div>
+            </div>
+            <span style="font-size: 22px; color: #007AFF; font-weight: 800;">→</span>
+          </div>
+
+          <div class="share-option-row">
+            <div class="share-icon-circle" style="background: #22C55E; color: #FFFFFF;">
+              💬
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 22px; font-weight: 800; color: #0F172A;">Enviar no WhatsApp</div>
+              <div style="font-size: 16px; color: #64748B; margin-top: 2px;">PDF ou imagens direto na conversa</div>
+            </div>
+            <span style="font-size: 22px; color: #94A3B8;">→</span>
+          </div>
+
+          <div class="share-option-row">
+            <div class="share-icon-circle" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #0F172A;">
+              🖼️
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 22px; font-weight: 800; color: #0F172A;">Exportar como Imagens (JPG)</div>
+              <div style="font-size: 16px; color: #64748B; margin-top: 2px;">Páginas individuais selecionadas</div>
+            </div>
+            <span style="font-size: 22px; color: #94A3B8;">→</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">💬 Direto no WhatsApp</div>
+      <div class="feature-item-pill">📄 PDF em Alta Resolução</div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================== -->
+  <!-- BANNER 5: PASTAS E ORGANIZAÇÃO DA BIBLIOTECA               -->
+  <!-- ========================================================== -->
+  <div class="banner-container bg-gradient-emerald" id="banner-5">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        <svg viewBox="0 0 24 24"><path d="M10 4H4C2.89 4 2.01 4.89 2.01 6L2 18C2 19.11 2.89 20 4 20H20C21.11 20 22 19.11 22 18V8C22 6.89 21.11 6 20 6H12L10 4Z"/></svg>
+        Tudo no Seu Lugar
+      </div>
+      <h1 class="main-title">Pastas & Arquivos</h1>
+      <p class="subtitle">Organize por categorias e encontre qualquer recibo ou contrato em segundos</p>
+    </div>
+
+    <!-- Smartphone Mockup -->
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="library-screen-content">
+          <div class="library-header-row">
+            <div class="library-title">Biblioteca</div>
+            <div style="background: #007AFF; color: #FFFFFF; padding: 10px 22px; border-radius: 999px; font-weight: 800; font-size: 17px;">+ Nova Pasta</div>
+          </div>
+
+          <!-- Campo de Busca -->
+          <div style="background: #F1F5F9; border-radius: 16px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; border: 1px solid #E2E8F0;">
+            <span style="font-size: 22px;">🔍</span>
+            <span style="color: #64748B; font-size: 18px; font-weight: 500;">Buscar por título ou texto do documento...</span>
+          </div>
+
+          <!-- Grade de Pastas Inteligentes -->
+          <div class="folder-grid-row">
+            <div class="folder-card-widget">
+              <div class="folder-icon-large" style="background: #EFF6FF; color: #007AFF;">📁</div>
+              <div>
+                <div class="folder-title-text">Contratos</div>
+                <div class="folder-count-text">14 documentos</div>
+              </div>
+            </div>
+
+            <div class="folder-card-widget">
+              <div class="folder-icon-large" style="background: #ECFDF5; color: #10B981;">🧾</div>
+              <div>
+                <div class="folder-title-text">Recibos & Notas</div>
+                <div class="folder-count-text">28 documentos</div>
+              </div>
+            </div>
+
+            <div class="folder-card-widget">
+              <div class="folder-icon-large" style="background: #FEF3C7; color: #D97706;">💼</div>
+              <div>
+                <div class="folder-title-text">Trabalho</div>
+                <div class="folder-count-text">9 documentos</div>
+              </div>
+            </div>
+
+            <div class="folder-card-widget">
+              <div class="folder-icon-large" style="background: #F3E8FF; color: #9333EA;">🏠</div>
+              <div>
+                <div class="folder-title-text">Pessoal</div>
+                <div class="folder-count-text">6 documentos</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Documentos Recentes -->
+          <div style="margin-top: 10px;">
+            <div style="font-size: 20px; font-weight: 800; color: #1E293B; margin-bottom: 14px;">Arquivos Recentes</div>
+            <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 18px; padding: 18px; display: flex; align-items: center; gap: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+              <div style="width: 52px; height: 52px; border-radius: 12px; background: #007AFF; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 24px;">📄</div>
+              <div style="flex: 1;">
+                <div style="font-size: 19px; font-weight: 800; color: #0F172A;">Contrato de Aluguel 2026.pdf</div>
+                <div style="font-size: 15px; color: #64748B;">3 páginas • Hoje, 09:30</div>
+              </div>
+              <span style="color: #007AFF; font-size: 22px;">★</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">📁 Pastas Ilimitadas</div>
+      <div class="feature-item-pill">🔍 Busca Rápida</div>
+      <div class="feature-item-pill">💎 Preço Acessível</div>
+    </div>
+  </div>
+
+</body>
+</html>

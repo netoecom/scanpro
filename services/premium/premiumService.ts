@@ -12,20 +12,20 @@ export class PremiumService {
   private static packages: PaywallPackage[] = [
     {
       id: 'scanpro_pro_yearly',
-      name: 'Anual (Recomendado)',
+      name: 'Anual (Mais Popular)',
       period: 'yearly',
-      price: 'R$ 99,90/ano',
-      monthlyEquivalentPrice: 'R$ 8,32/mês',
-      badge: 'Economize 44%',
+      price: 'R$ 49,90/ano',
+      monthlyEquivalentPrice: 'R$ 4,15/mês',
+      badge: 'Melhor Custo-Benefício',
       trialDays: 3,
-      description: '3 dias grátis, depois R$ 99,90 por ano. Cancele quando quiser.',
+      description: '3 dias grátis, depois R$ 49,90 por ano. Cancele quando quiser.',
     },
     {
       id: 'scanpro_pro_monthly',
       name: 'Mensal',
       period: 'monthly',
-      price: 'R$ 14,90/mês',
-      description: 'Cobrança mensal recorrente. Flexibilidade total.',
+      price: 'R$ 3,99/mês',
+      description: 'Apenas R$ 3,99 por mês com flexibilidade total.',
     },
   ];
 

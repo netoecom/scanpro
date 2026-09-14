@@ -204,8 +204,8 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
               />
               <Text style={styles.guaranteeText}>
                 {selectedPlanId === 'scanpro_pro_yearly'
-                  ? '3 dias grátis, depois R$ 99,90 por ano. Cancele quando quiser antes do fim do teste.'
-                  : 'Cobrança mensal recorrente. Sem fidelidade.'}
+                  ? '3 dias grátis, depois R$ 49,90 por ano. Cancele quando quiser antes do fim do teste.'
+                  : 'Apenas R$ 3,99 por mês. Sem fidelidade, cancele a qualquer momento.'}
               </Text>
             </View>
 

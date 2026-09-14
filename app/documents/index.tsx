@@ -137,12 +137,12 @@ export default function DocumentsScreen() {
           </View>
         </View>
 
-        {/* Campo de Busca Rápida com suporte a OCR */}
+        {/* Campo de Busca Rápida com suporte a texto extraído e títulos */}
         <View style={styles.searchWrapper}>
           <SearchField
             value={searchQuery}
             onChangeText={(text) => setSearchQuery(text)}
-            placeholder="Buscar por título ou conteúdo OCR..."
+            placeholder="Buscar por título ou texto do documento..."
           />
         </View>
 
@@ -235,7 +235,7 @@ export default function DocumentsScreen() {
             onPress={() => setActiveTab('all')}
           >
             <Text style={[styles.tabChipText, activeTab === 'all' && styles.tabChipTextActive]}>
-              Todos os Arquivos
+              Todos os Documentos
             </Text>
           </TouchableOpacity>
 

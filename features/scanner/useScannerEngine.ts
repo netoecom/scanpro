@@ -43,12 +43,9 @@ export function useScannerEngine() {
     }
   }, []);
 
-  // Monitorar permissão nativa ou de navegador
+  // Monitorar permissão no navegador (Web/PWA)
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      if (!nativePermission) {
-        requestNativePermission();
-      }
       return;
     }
 
@@ -122,17 +119,18 @@ export function useScannerEngine() {
   const handleMountError = useCallback((error: any) => {
     console.warn('Erro ao inicializar câmera:', error);
     const errName = error?.name || '';
+    const errMsg = error?.message || '';
     if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
       setWebPermissionGranted(false);
       setCameraError(
-        'Permissão de câmera bloqueada pelo navegador. Ative a câmera no ícone de configurações do site.'
+        'Permissão de câmera bloqueada. Ative o acesso à câmera nas configurações do seu aparelho.'
       );
     } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
       setCameraError('Nenhuma câmera física encontrada no dispositivo.');
     } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
       setCameraError('A câmera está sendo utilizada por outro aplicativo.');
     } else {
-      setCameraError('Não foi possível iniciar a câmera.');
+      setCameraError('Não foi possível iniciar a câmera neste momento. Tente novamente ou use a galeria.');
     }
   }, []);
 
@@ -334,6 +332,31 @@ export function useScannerEngine() {
     }
   }, [filterMode, processCapturedImage]);
 
+  // Disparar Câmera Nativa do Sistema Operacional (Hardware oficial Motorola/Android com 100% de estabilidade)
+  const launchNativeCamera = useCallback(async (): Promise<string | null> => {
+    try {
+      TelemetryService.track('capture', { source: 'native_system_camera' });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.95,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setRawCapturedUri(uri);
+        const detection = await EdgeDetector.detectDocumentCorners(uri);
+        setActiveCorners(detection.corners);
+        await processCapturedImage(uri, filterMode, detection.corners);
+        return uri;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Falha ao abrir câmera nativa do sistema:', err);
+      return null;
+    }
+  }, [filterMode, processCapturedImage]);
+
   const addCurrentPageToDocument = useCallback(() => {
     if (processedResult) {
       setCapturedPages((prev) => [...prev, processedResult]);
@@ -368,6 +391,8 @@ export function useScannerEngine() {
     cameraRef,
     webCameraRef,
     status,
+    isPermissionLoading:
+      Platform.OS === 'web' ? false : nativePermission === null,
     hasPermission:
       Platform.OS === 'web'
         ? webPermissionGranted !== false
@@ -388,6 +413,7 @@ export function useScannerEngine() {
     capturedPages,
     confidence,
     captureDocument,
+    launchNativeCamera,
     pickFromGallery,
     changeFilterMode,
     addCurrentPageToDocument,

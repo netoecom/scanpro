@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Banner 3 — Carteira de Identidade RG e CNH</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+    .banner-container {
+      width: 1080px; height: 1920px; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center;
+      background: radial-gradient(circle at 50% 12%, #4F46E5 0%, #3730A3 45%, #312E81 80%, #1E1B4B 100%);
+    }
+    .glow-orb {
+      position: absolute; width: 850px; height: 850px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(165, 180, 252, 0.28) 0%, rgba(79, 70, 229, 0.15) 50%, transparent 75%);
+      top: -150px; left: 115px; pointer-events: none; filter: blur(40px);
+    }
+    .subtle-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 60px 60px; pointer-events: none;
+    }
+    .header-content {
+      margin-top: 130px; text-align: center; z-index: 5; padding: 0 60px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .badge-pill {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.35); color: #FFFFFF;
+      font-size: 26px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 14px 34px; border-radius: 999px; margin-bottom: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .main-title {
+      font-size: 100px; line-height: 1.05; font-weight: 900; color: #FFFFFF;
+      letter-spacing: -2px; text-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+    .subtitle {
+      margin-top: 24px; font-size: 46px; line-height: 1.25; font-weight: 600;
+      color: rgba(255, 255, 255, 0.94); max-width: 960px;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+    }
+    .device-mockup {
+      position: absolute; bottom: 85px; width: 840px; height: 1140px;
+      background: #000000; border-radius: 64px 64px 50px 50px;
+      box-shadow: 0 35px 90px rgba(0, 0, 0, 0.85), 0 0 0 12px #1E293B, 0 0 0 16px #334155, 0 0 0 22px #0F172A;
+      overflow: hidden; display: flex; flex-direction: column; z-index: 4;
+    }
+    .device-statusbar {
+      height: 48px; background: rgba(0, 0, 0, 0.6); display: flex;
+      justify-content: space-between; align-items: center; padding: 0 44px;
+      color: #FFFFFF; font-size: 20px; font-weight: 600; z-index: 10;
+    }
+    .device-notch {
+      width: 16px; height: 16px; border-radius: 50%; background: #111;
+      box-shadow: inset 0 0 3px rgba(255,255,255,0.2);
+    }
+    .screen-body { flex: 1; position: relative; background: #0F172A; display: flex; flex-direction: column; }
+    
+    .top-header-bar {
+      padding: 20px 32px; background: #1E293B; display: flex;
+      justify-content: space-between; align-items: center; color: #FFFFFF;
+      border-bottom: 1px solid #334155;
+    }
+    
+    .sheet-container {
+      flex: 1; background: #1E293B; padding: 30px 45px; display: flex;
+      justify-content: center; align-items: center;
+    }
+    
+    .a4-page {
+      width: 100%; height: 100%; background: #FFFFFF; border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); padding: 36px 40px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    
+    .rg-card {
+      width: 100%; height: 420px; background: #ECFDF5; border: 2.5px solid #10B981;
+      border-radius: 18px; padding: 22px 28px; display: flex; flex-direction: column;
+      justify-content: space-between; position: relative;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+    }
+    .rg-badge {
+      position: absolute; top: 16px; right: 18px; background: #10B981; color: #FFFFFF;
+      font-size: 15px; font-weight: 800; padding: 6px 14px; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .rg-header {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .rg-emblem {
+      width: 44px; height: 44px; border-radius: 50%; background: #059669;
+      color: #FFFFFF; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 19px;
+    }
+    .rg-titles {
+      display: flex; flex-direction: column;
+    }
+    .rg-titles h3 { font-size: 17px; font-weight: 800; color: #065F46; line-height: 1.2; }
+    .rg-titles p { font-size: 12px; font-weight: 700; color: #047857; }
+    
+    .rg-content-row {
+      display: flex; gap: 20px; align-items: center;
+    }
+    .rg-photo-box {
+      width: 120px; height: 155px; background: #D1FAE5; border: 2px solid #34D399;
+      border-radius: 12px; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; color: #059669; font-size: 44px;
+    }
+    .rg-fields-list {
+      flex: 1; display: flex; flex-direction: column; gap: 10px;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font-size: 11px; font-weight: 800; color: #065F46; }
+    .field-bar { height: 14px; background: #A7F3D0; border-radius: 4px; }
+    
+    .rg-back {
+      width: 100%; height: 420px; background: #F0FDFA; border: 2.5px solid #14B8A6;
+      border-radius: 18px; padding: 22px 28px; display: flex; flex-direction: column;
+      justify-content: space-between; position: relative;
+      box-shadow: 0 8px 24px rgba(20, 184, 166, 0.15);
+    }
+    .rg-back-badge {
+      position: absolute; top: 16px; right: 18px; background: #0D9488; color: #FFFFFF;
+      font-size: 15px; font-weight: 800; padding: 6px 14px; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    
+    .features-pill-row {
+      position: absolute; bottom: 22px; display: flex; gap: 16px; z-index: 10;
+    }
+    .feature-item-pill {
+      display: flex; align-items: center; gap: 8px; background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px); padding: 10px 22px; border-radius: 999px;
+      color: #FFFFFF; font-size: 19px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+  </style>
+</head>
+<body>
+  <div class="banner-container">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        🪪 Modo Identidade Inteligente
+      </div>
+      <h1 class="main-title">Carteira de Identidade</h1>
+      <p class="subtitle">Digitalize RG, CNH e Passaporte alinhados em 1 página pronta</p>
+    </div>
+
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="top-header-bar">
+          <span style="font-size: 26px;">✕</span>
+          <span style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">Modo Documento (2 em 1)</span>
+          <span style="background: #4F46E5; color: #FFF; padding: 6px 18px; border-radius: 999px; font-weight: 800; font-size: 16px;">Exportar</span>
+        </div>
+
+        <div class="sheet-container">
+          <div class="a4-page">
+            <!-- RG Frente -->
+            <div class="rg-card">
+              <div class="rg-badge">Frente Oficial</div>
+              <div class="rg-header">
+                <div class="rg-emblem">BR</div>
+                <div class="rg-titles">
+                  <h3>REPÚBLICA FEDERATIVA DO BRASIL</h3>
+                  <p>REGISTRO GERAL DE IDENTIDADE CIVIL</p>
+                </div>
+              </div>
+
+              <div class="rg-content-row">
+                <div class="rg-photo-box">
+                  <span>👤</span>
+                </div>
+                <div class="rg-fields-list">
+                  <div class="field-group">
+                    <span class="field-label">NOME COMPLETO</span>
+                    <div class="field-bar" style="width: 95%;"></div>
+                  </div>
+                  <div class="field-group">
+                    <span class="field-label">REGISTRO GERAL (RG)</span>
+                    <div class="field-bar" style="width: 75%;"></div>
+                  </div>
+                  <div class="field-group">
+                    <span class="field-label">DATA DE NASCIMENTO / NATURALIDADE</span>
+                    <div class="field-bar" style="width: 85%;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="font-size: 12px; font-weight: 800; color: #059669; text-align: center;">
+                VALIDADE EM TODO O TERRITÓRIO NACIONAL
+              </div>
+            </div>
+
+            <!-- RG Verso -->
+            <div class="rg-back">
+              <div class="rg-back-badge">Verso Oficial</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 15px; font-weight: 800; color: #115E59;">POLEGAR DIREITO</span>
+                <span style="font-size: 13px; font-weight: 700; color: #0F766E;">SECRETARIA DE SEGURANÇA PÚBLICA</span>
+              </div>
+
+              <div style="display: flex; gap: 20px; align-items: center;">
+                <div style="width: 100px; height: 140px; background: #CCFBF1; border: 2px dashed #14B8A6; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 36px;">
+                  👆
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                  <div class="field-bar" style="background: #99F6E4; width: 100%;"></div>
+                  <div class="field-bar" style="background: #99F6E4; width: 85%;"></div>
+                  <div class="field-bar" style="background: #99F6E4; width: 90%;"></div>
+                  <div style="height: 24px; background: #134E4A; border-radius: 4px; margin-top: 6px; width: 95%;"></div>
+                </div>
+              </div>
+
+              <div style="font-size: 12px; font-weight: 700; color: #0D9488; text-align: center;">
+                AUTENTICADO COM CRIPTOGRAFIA LOCAL-FIRST
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">🪪 Frente e Verso em A4</div>
+      <div class="feature-item-pill">🔒 100% no Aparelho</div>
+      <div class="feature-item-pill">🚫 Sem Marcas d'Água</div>
+    </div>
+  </div>
+</body>
+</html>

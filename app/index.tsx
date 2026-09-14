@@ -19,6 +19,9 @@ import { useDocumentStore, usePremiumStore } from '../store';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { TelemetryService } from '../services/telemetry';
 
+// Controle em memória de sessão nativa e web para evitar reexibição do splash de boas-vindas
+let hasShownSessionIntro = false;
+
 export default function HomeScreen() {
   const router = useRouter();
   const { documents, loadDocuments, toggleFavorite, deleteDocument } = useDocumentStore();
@@ -28,10 +31,15 @@ export default function HomeScreen() {
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<{ id: string; title: string } | null>(null);
 
-  // Splash de Introdução Homogêneo e Moderno na inicialização da sessão
+  // Splash de Introdução Homogêneo e Moderno na inicialização da sessão (exibido apenas 1x no cold-start)
   const [showIntroSplash, setShowIntroSplash] = useState(() => {
+    if (hasShownSessionIntro) return false;
     if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
-      return !sessionStorage.getItem('scanpro_session_intro_shown');
+      const shown = sessionStorage.getItem('scanpro_session_intro_shown');
+      if (shown) {
+        hasShownSessionIntro = true;
+        return false;
+      }
     }
     return true;
   });
@@ -54,6 +62,7 @@ export default function HomeScreen() {
   }, [loadDocuments]);
 
   const handleIntroFinish = () => {
+    hasShownSessionIntro = true;
     if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem('scanpro_session_intro_shown', 'true');
     }

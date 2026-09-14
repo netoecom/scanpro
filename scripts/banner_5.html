@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Banner 5 — Pastas e Organização de Arquivos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+    .banner-container {
+      width: 1080px; height: 1920px; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center;
+      background: radial-gradient(circle at 50% 12%, #0D9488 0%, #0F766E 45%, #115E59 80%, #042F2E 100%);
+    }
+    .glow-orb {
+      position: absolute; width: 850px; height: 850px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(45, 212, 191, 0.3) 0%, rgba(13, 148, 136, 0.15) 50%, transparent 75%);
+      top: -150px; left: 115px; pointer-events: none; filter: blur(40px);
+    }
+    .subtle-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 60px 60px; pointer-events: none;
+    }
+    .header-content {
+      margin-top: 130px; text-align: center; z-index: 5; padding: 0 60px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .badge-pill {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.35); color: #FFFFFF;
+      font-size: 26px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 14px 34px; border-radius: 999px; margin-bottom: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .main-title {
+      font-size: 104px; line-height: 1.05; font-weight: 900; color: #FFFFFF;
+      letter-spacing: -2px; text-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+    .subtitle {
+      margin-top: 24px; font-size: 46px; line-height: 1.25; font-weight: 600;
+      color: rgba(255, 255, 255, 0.94); max-width: 960px;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+    }
+    .device-mockup {
+      position: absolute; bottom: 85px; width: 840px; height: 1140px;
+      background: #000000; border-radius: 64px 64px 50px 50px;
+      box-shadow: 0 35px 90px rgba(0, 0, 0, 0.85), 0 0 0 12px #1E293B, 0 0 0 16px #334155, 0 0 0 22px #0F172A;
+      overflow: hidden; display: flex; flex-direction: column; z-index: 4;
+    }
+    .device-statusbar {
+      height: 48px; background: rgba(0, 0, 0, 0.6); display: flex;
+      justify-content: space-between; align-items: center; padding: 0 44px;
+      color: #FFFFFF; font-size: 20px; font-weight: 600; z-index: 10;
+    }
+    .device-notch {
+      width: 16px; height: 16px; border-radius: 50%; background: #111;
+      box-shadow: inset 0 0 3px rgba(255,255,255,0.2);
+    }
+    .screen-body { flex: 1; position: relative; background: #F8FAFC; display: flex; flex-direction: column; padding: 32px 36px; gap: 24px; }
+    
+    .lib-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .lib-title {
+      font-size: 38px; font-weight: 900; color: #0F172A; letter-spacing: -0.5px;
+    }
+    .btn-new-folder {
+      background: #007AFF; color: #FFFFFF; padding: 10px 22px; border-radius: 999px;
+      font-weight: 800; font-size: 16px; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+    }
+    
+    .search-bar {
+      background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 18px;
+      padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    .search-text {
+      font-size: 17px; font-weight: 500; color: #64748B;
+    }
+    
+    .folders-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+    }
+    .folder-card {
+      background: #FFFFFF; border-radius: 22px; padding: 22px; border: 1.5px solid #E2E8F0;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04); display: flex; flex-direction: column; gap: 14px;
+    }
+    .folder-icon {
+      width: 54px; height: 54px; border-radius: 16px; display: flex;
+      align-items: center; justify-content: center; font-size: 28px;
+    }
+    .folder-name {
+      font-size: 22px; font-weight: 800; color: #0F172A;
+    }
+    .folder-meta {
+      font-size: 15px; font-weight: 600; color: #64748B;
+    }
+    
+    .recent-header {
+      font-size: 20px; font-weight: 800; color: #0F172A; margin-top: 6px;
+    }
+    .recent-file-card {
+      background: #FFFFFF; border-radius: 20px; padding: 18px 22px;
+      border: 1.5px solid #E2E8F0; display: flex; align-items: center; gap: 18px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+    }
+    .file-icon {
+      width: 52px; height: 52px; border-radius: 14px; background: #EFF6FF;
+      color: #007AFF; display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .file-title {
+      font-size: 18px; font-weight: 800; color: #0F172A;
+    }
+    .file-sub {
+      font-size: 14px; font-weight: 600; color: #64748B; margin-top: 2px;
+    }
+    
+    .features-pill-row {
+      position: absolute; bottom: 22px; display: flex; gap: 16px; z-index: 10;
+    }
+    .feature-item-pill {
+      display: flex; align-items: center; gap: 8px; background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px); padding: 10px 22px; border-radius: 999px;
+      color: #FFFFFF; font-size: 19px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+  </style>
+</head>
+<body>
+  <div class="banner-container">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        📁 Organização Inteligente
+      </div>
+      <h1 class="main-title">Pastas & Arquivos</h1>
+      <p class="subtitle">Organize por categorias e encontre qualquer recibo ou contrato em segundos</p>
+    </div>
+
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="lib-header">
+          <div class="lib-title">Biblioteca</div>
+          <div class="btn-new-folder">+ Nova Pasta</div>
+        </div>
+
+        <div class="search-bar">
+          <span style="font-size: 22px;">🔍</span>
+          <span class="search-text">Buscar por título ou texto do documento...</span>
+        </div>
+
+        <div class="folders-grid">
+          <div class="folder-card">
+            <div class="folder-icon" style="background: #EFF6FF; color: #007AFF;">📁</div>
+            <div>
+              <div class="folder-name">Contratos</div>
+              <div class="folder-meta">14 documentos</div>
+            </div>
+          </div>
+
+          <div class="folder-card">
+            <div class="folder-icon" style="background: #ECFDF5; color: #10B981;">🧾</div>
+            <div>
+              <div class="folder-name">Recibos & Notas</div>
+              <div class="folder-meta">28 documentos</div>
+            </div>
+          </div>
+
+          <div class="folder-card">
+            <div class="folder-icon" style="background: #FEF3C7; color: #D97706;">💼</div>
+            <div>
+              <div class="folder-name">Trabalho</div>
+              <div class="folder-meta">9 documentos</div>
+            </div>
+          </div>
+
+          <div class="folder-card">
+            <div class="folder-icon" style="background: #F3E8FF; color: #9333EA;">🏠</div>
+            <div>
+              <div class="folder-name">Pessoal</div>
+              <div class="folder-meta">6 documentos</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="recent-header">Arquivos Recentes</div>
+          <div class="recent-file-card" style="margin-top: 12px;">
+            <div class="file-icon">📄</div>
+            <div style="flex: 1;">
+              <div class="file-title">Contrato de Prestação 2026.pdf</div>
+              <div class="file-sub">3 páginas • Hoje, 09:30 • PDF HD</div>
+            </div>
+            <span style="color: #007AFF; font-size: 22px;">★</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">📁 Pastas Ilimitadas</div>
+      <div class="feature-item-pill">💎 R$ 3,99/mês ou R$ 49,90/ano</div>
+      <div class="feature-item-pill">🔒 100% Local-First</div>
+    </div>
+  </div>
+</body>
+</html>

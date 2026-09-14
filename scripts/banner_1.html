@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Banner 1 — Digitalize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+    .banner-container {
+      width: 1080px; height: 1920px; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center;
+      background: radial-gradient(circle at 50% 12%, #007AFF 0%, #0055D4 45%, #002B7A 85%, #001845 100%);
+    }
+    .glow-orb {
+      position: absolute; width: 850px; height: 850px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.28) 0%, rgba(0, 122, 255, 0.12) 50%, transparent 75%);
+      top: -150px; left: 115px; pointer-events: none; filter: blur(40px);
+    }
+    .subtle-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 60px 60px; pointer-events: none;
+    }
+    .header-content {
+      margin-top: 130px; text-align: center; z-index: 5; padding: 0 60px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .badge-pill {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.35); color: #FFFFFF;
+      font-size: 26px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 14px 34px; border-radius: 999px; margin-bottom: 30px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .main-title {
+      font-size: 104px; line-height: 1.05; font-weight: 900; color: #FFFFFF;
+      letter-spacing: -2px; text-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+    .subtitle {
+      margin-top: 24px; font-size: 46px; line-height: 1.25; font-weight: 600;
+      color: rgba(255, 255, 255, 0.94); max-width: 960px;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+    }
+    .device-mockup {
+      position: absolute; bottom: 85px; width: 840px; height: 1140px;
+      background: #000000; border-radius: 64px 64px 50px 50px;
+      box-shadow: 0 35px 90px rgba(0, 0, 0, 0.85), 0 0 0 12px #1E293B, 0 0 0 16px #334155, 0 0 0 22px #0F172A;
+      overflow: hidden; display: flex; flex-direction: column; z-index: 4;
+    }
+    .device-statusbar {
+      height: 48px; background: rgba(0, 0, 0, 0.4); display: flex;
+      justify-content: space-between; align-items: center; padding: 0 44px;
+      color: #FFFFFF; font-size: 20px; font-weight: 600; z-index: 10;
+    }
+    .device-notch {
+      width: 16px; height: 16px; border-radius: 50%; background: #111;
+      box-shadow: inset 0 0 3px rgba(255,255,255,0.2);
+    }
+    .screen-body { flex: 1; position: relative; background: #020617; display: flex; flex-direction: column; }
+    .scanner-top-bar { padding: 22px 32px; display: flex; justify-content: space-between; align-items: center; z-index: 8; }
+    .icon-btn-round { width: 52px; height: 52px; border-radius: 26px; background: rgba(255, 255, 255, 0.16); display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 20px; }
+    .scanner-document-preview-split {
+      position: absolute; top: 96px; left: 55px; right: 55px; bottom: 180px;
+      background: #1E293B; border-radius: 20px; overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    .doc-before-after-wrap { position: relative; width: 100%; height: 100%; background: #E2E8F0; }
+    .doc-side-raw {
+      position: absolute; inset: 0; background: #CBD5E1; display: flex;
+      flex-direction: column; padding: 40px 45px; filter: contrast(0.85) brightness(0.9);
+      transform: rotate(-1.2deg) scale(0.97);
+    }
+    .doc-side-clean {
+      position: absolute; inset: 0; background: #FFFFFF; display: flex;
+      flex-direction: column; padding: 40px 45px; clip-path: polygon(100% 0, 100% 100%, 0 100%);
+      box-shadow: -5px -5px 25px rgba(0,0,0,0.1);
+    }
+    .split-cut-line {
+      position: absolute; top: 0; bottom: 0; left: 0; right: 0; pointer-events: none;
+      background: linear-gradient(to top left, transparent calc(50% - 3.5px), #00E5FF calc(50% - 3.5px), #007AFF calc(50% + 3.5px), transparent calc(50% + 3.5px));
+      z-index: 7; filter: drop-shadow(0 0 12px #00E5FF);
+    }
+    .tag-before {
+      position: absolute; top: 30px; left: 30px; background: rgba(15, 23, 42, 0.85);
+      color: #94A3B8; font-size: 19px; font-weight: 700; padding: 7px 18px;
+      border-radius: 999px; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .tag-after {
+      position: absolute; bottom: 30px; right: 30px; background: #007AFF;
+      color: #FFFFFF; font-size: 21px; font-weight: 800; padding: 9px 24px;
+      border-radius: 999px; text-transform: uppercase; letter-spacing: 1px;
+      box-shadow: 0 6px 18px rgba(0, 122, 255, 0.5); z-index: 8;
+    }
+    .doc-header-title {
+      font-size: 23px; font-weight: 800; color: #0F172A; margin-bottom: 18px;
+      text-align: center; text-transform: uppercase; border-bottom: 2px solid #007AFF; padding-bottom: 10px;
+    }
+    .doc-text-paragraph {
+      font-size: 15.5px; line-height: 1.6; color: #334155; margin-bottom: 14px; text-align: justify;
+    }
+    .scanner-bottom-bar {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 160px;
+      background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px);
+      display: flex; align-items: center; justify-content: space-around; padding: 0 50px; z-index: 8;
+    }
+    .shutter-btn-large {
+      width: 90px; height: 90px; border-radius: 50%; border: 5px solid #FFFFFF;
+      padding: 5px; display: flex; align-items: center; justify-content: center;
+    }
+    .shutter-inner {
+      width: 100%; height: 100%; border-radius: 50%; background: #007AFF;
+      box-shadow: 0 0 20px rgba(0, 122, 255, 0.85);
+    }
+    .features-pill-row {
+      position: absolute; bottom: 22px; display: flex; gap: 16px; z-index: 10;
+    }
+    .feature-item-pill {
+      display: flex; align-items: center; gap: 8px; background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px); padding: 10px 22px; border-radius: 999px;
+      color: #FFFFFF; font-size: 19px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+  </style>
+</head>
+<body>
+  <div class="banner-container">
+    <div class="glow-orb"></div>
+    <div class="subtle-grid"></div>
+
+    <div class="header-content">
+      <div class="badge-pill">
+        ✨ Detecção Inteligente Instantânea
+      </div>
+      <h1 class="main-title">Digitalize</h1>
+      <p class="subtitle">Enquadramento automático com correção de bordas e perspectiva</p>
+    </div>
+
+    <div class="device-mockup">
+      <div class="device-statusbar">
+        <span>09:41</span>
+        <div class="device-notch"></div>
+        <span>5G 100%</span>
+      </div>
+
+      <div class="screen-body">
+        <div class="scanner-top-bar">
+          <div class="icon-btn-round">✕</div>
+          <div style="background: rgba(0,229,255,0.25); border: 1.5px solid #00E5FF; padding: 8px 24px; border-radius: 999px; color: #00E5FF; font-weight: 800; font-size: 16px;">AUTO-CAPTURE</div>
+          <div class="icon-btn-round">⚡</div>
+        </div>
+
+        <div class="scanner-document-preview-split">
+          <div class="doc-before-after-wrap">
+            <div class="doc-side-raw">
+              <div class="tag-before">Original da Câmera</div>
+              <div class="doc-header-title" style="opacity: 0.6;">Contrato de Prestação de Serviços</div>
+              <div class="doc-text-paragraph" style="opacity: 0.5;">Pelo presente instrumento particular, as partes formalizam o acordo de serviços profissionais com total confidencialidade e segurança...</div>
+              <div class="doc-text-paragraph" style="opacity: 0.5;">Fica acordado o fornecimento contínuo de tecnologia scanner móvel de alta definição com processamento direto no hardware do aparelho.</div>
+            </div>
+
+            <div class="doc-side-clean">
+              <div class="tag-after">Digitalizado ScanPro ✨</div>
+              <div class="doc-header-title">Contrato de Prestação de Serviços</div>
+              <div class="doc-text-paragraph">Pelo presente instrumento particular, as partes formalizam o acordo de serviços profissionais com total confidencialidade e segurança...</div>
+              <div class="doc-text-paragraph">Fica acordado o fornecimento contínuo de tecnologia scanner móvel de alta definição com processamento direto no hardware do aparelho.</div>
+              <div class="doc-text-paragraph" style="font-weight: 700; color: #007AFF;">Parágrafo 1º: Todos os documentos são protegidos com padrão Local-First e zero compartilhamento com terceiros.</div>
+            </div>
+
+            <div class="split-cut-line"></div>
+          </div>
+        </div>
+
+        <div class="scanner-bottom-bar">
+          <div style="color: #FFFFFF; font-size: 20px; font-weight: 700;">🖼️ Galeria</div>
+          <div class="shutter-btn-large">
+            <div class="shutter-inner"></div>
+          </div>
+          <div style="color: #00E5FF; font-size: 20px; font-weight: 800;">1 Página</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-pill-row">
+      <div class="feature-item-pill">🔒 100% Local-First</div>
+      <div class="feature-item-pill">⚡ Sem Espera</div>
+      <div class="feature-item-pill">🚫 Sem Marcas d'Água</div>
+    </div>
+  </div>
+</body>
+</html>
