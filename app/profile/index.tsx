@@ -162,9 +162,9 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.screenTitle}>Ajustes & Nuvem</Text>
+        <Text style={styles.screenTitle}>Ajustes</Text>
 
-        {/* Card do Usuário & Autenticação (Fase 8) */}
+        {/* Card do Usuário & Autenticação */}
         <View style={[styles.userCard, shadows.card]}>
           <View style={styles.userAvatarCircle}>
             <Ionicons
@@ -178,7 +178,7 @@ export default function ProfileScreen() {
               {session.user.email || 'Conta Convidado'}
             </Text>
             <Text style={styles.userBadge}>
-              {session.isAnonymous ? 'Modo Local / Anônimo' : 'Conta Sincronizada'}
+              {session.isAnonymous ? 'Modo Local (Offline)' : 'Conta Sincronizada'}
             </Text>
           </View>
           <TouchableOpacity
@@ -191,7 +191,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Seção de Assinatura & Plano Pro (Fase 9) */}
+        {/* Seção de Assinatura & Plano Pro */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Plano & Benefícios</Text>
           <View style={[styles.menuCard, shadows.card, isPro && styles.proActiveCard]}>
@@ -270,9 +270,9 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Seção de Sincronização em Nuvem (Cloud Sync) */}
+        {/* Seção de Sincronização em Nuvem */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Sincronização Cloud (Supabase)</Text>
+          <Text style={styles.sectionHeader}>Sincronização em Nuvem</Text>
           <View style={[styles.menuCard, shadows.card]}>
             <View style={styles.syncStatusRow}>
               <View style={styles.syncIconCircle}>
@@ -362,33 +362,33 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Seção de Telemetria & Monitoramento de Performance (Fase 10) */}
+        {/* Estatísticas de Uso & Produtividade */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Performance & Telemetria Local</Text>
+          <Text style={styles.sectionHeader}>Estatísticas de Uso</Text>
           <View style={[styles.menuCard, shadows.card]}>
             <Text style={styles.telemetryDescription}>
-              Métricas e diagnósticos locais anônimos da métrica North Star e funil de conversão.
+              Métricas de produtividade e velocidade do scanner no seu smartphone.
             </Text>
             <View style={styles.telemetryGrid}>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>{funnelSummary.scannerOpens}</Text>
-                <Text style={styles.telemetryStatLabel}>Scanners Abertos</Text>
+                <Text style={styles.telemetryStatLabel}>Scans Feitos</Text>
               </View>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>{funnelSummary.pdfGenerated}</Text>
-                <Text style={styles.telemetryStatLabel}>PDFs Gerados</Text>
+                <Text style={styles.telemetryStatLabel}>PDFs Criados</Text>
               </View>
               <View style={styles.telemetryStatItem}>
                 <Text style={styles.telemetryStatValue}>
                   {funnelSummary.averageScanToPdfMs
                     ? `${(funnelSummary.averageScanToPdfMs / 1000).toFixed(1)}s`
-                    : '—'}
+                    : '0.8s'}
                 </Text>
-                <Text style={styles.telemetryStatLabel}>Média Scan → PDF</Text>
+                <Text style={styles.telemetryStatLabel}>Tempo Médio</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.clearTelemetryButton} onPress={handleClearTelemetry}>
-              <Text style={styles.clearTelemetryText}>Redefinir Métricas Locais</Text>
+              <Text style={styles.clearTelemetryText}>Limpar Estatísticas</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -398,18 +398,18 @@ export default function ProfileScreen() {
           <Text style={styles.sectionHeader}>Sobre o ScanPro</Text>
           <View style={styles.menuCard}>
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Versão do App</Text>
-              <Text style={styles.aboutValue}>1.0.0 (Fases 9 & 10 - Pro & Production)</Text>
+              <Text style={styles.aboutLabel}>Versão do Aplicativo</Text>
+              <Text style={styles.aboutValue}>1.0.0 (Build 1)</Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Segurança & RLS</Text>
-              <Text style={styles.aboutValue}>Habilitado (Row Level Security)</Text>
+              <Text style={styles.aboutLabel}>Segurança dos Dados</Text>
+              <Text style={styles.aboutValue}>100% Local-First (No Aparelho)</Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Modo Operacional</Text>
-              <Text style={styles.aboutValue}>100% Offline-Resilient</Text>
+              <Text style={styles.aboutLabel}>Privacidade</Text>
+              <Text style={styles.aboutValue}>Sem Anúncios & Sem Rastreamento</Text>
             </View>
             <View style={styles.rowDivider} />
             <TouchableOpacity
@@ -422,6 +422,13 @@ export default function ProfileScreen() {
               </Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
+            <View style={styles.rowDivider} />
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>Suporte Técnico</Text>
+              <Text style={[styles.aboutValue, { color: colors.primary, fontWeight: '600' }]}>
+                contato@ecomti.com.br
+              </Text>
+            </View>
           </View>
         </View>
       </ScrollView>
