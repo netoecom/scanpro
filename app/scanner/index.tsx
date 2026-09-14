@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   TextInput,
   PanResponder,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useIsFocused } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
@@ -28,7 +28,6 @@ import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const isFocused = useIsFocused();
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const { addDocument, addPagesToDocument, documents } = useDocumentStore();
   const targetDoc = documentId ? documents.find((d) => d.id === documentId) : null;
@@ -49,25 +48,7 @@ export default function ScannerScreen() {
   const initialPinchDistRef = useRef<number | null>(null);
   const initialPinchScaleRef = useRef<number>(1);
 
-  // Estados de proteção de ciclo de vida contra crash nativo no Android (Motorola/CameraX)
-  const [isMountDelayPassed, setIsMountDelayPassed] = useState(false);
-  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
-
-  // Garante que a animação nativa de transição de tela do Android conclua 100% antes de inicializar o sensor
-  React.useEffect(() => {
-    if (!isFocused) {
-      setIsMountDelayPassed(false);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setIsMountDelayPassed(true);
-    }, 280);
-
-    return () => clearTimeout(timer);
-  }, [isFocused]);
-
-  React.useEffect(() => {
+  useEffect(() => {
     TelemetryService.track('scanner_opened');
     TelemetryService.startScanTrace();
   }, []);
@@ -103,54 +84,30 @@ export default function ScannerScreen() {
     handleMountError,
     retakeCurrentPage,
     resetScanner,
+    // Novos controles de modo
+    cameraMode,
+    enableEmbeddedCamera,
+    switchToNativeCamera,
+    hasAutoLaunchedRef,
   } = useScannerEngine();
 
-  // Tela de Carregamento de Inicialização da Câmera
-  if (isPermissionLoading) {
-    return (
-      <SafeAreaView style={styles.permissionContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.permissionDescription, { marginTop: spacing.default, color: '#FFFFFF' }]}>
-          Iniciando câmera...
-        </Text>
-      </SafeAreaView>
-    );
-  }
+  // Auto-launch da câmera nativa ao abrir a tela do scanner (apenas uma vez por sessão)
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (hasAutoLaunchedRef.current) return;
+    if (status !== 'SCANNER_SEARCHING') return;
+    if (processedResult !== null) return;
+    if (capturedPages.length > 0) return;
 
-  // Tela de Permissão de Câmera
-  if (hasPermission === false) {
-    return (
-      <SafeAreaView style={styles.permissionContainer}>
-        <View style={styles.permissionCard}>
-          <View style={styles.permissionIconCircle}>
-            <Ionicons name="camera-outline" size={44} color={colors.primary} />
-          </View>
-          <Text style={styles.permissionTitle}>Acesso à Câmera Necessário</Text>
-          <Text style={styles.permissionDescription}>
-            Para digitalizar folhas, contratos e recibos com detecção automática e qualidade profissional, precisamos de autorização da câmera.
-          </Text>
-          <AppButton
-            title="Permitir Acesso à Câmera"
-            onPress={requestPermission}
-            variant="primary"
-            style={styles.permissionButton}
-          />
-          <AppButton
-            title="Escolher Foto da Galeria"
-            onPress={pickFromGallery}
-            variant="secondary"
-            style={{ marginTop: spacing.small, width: '100%' }}
-          />
-          <AppButton
-            title="Voltar ao Início"
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-            variant="tertiary"
-            style={{ marginTop: spacing.small }}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
+    hasAutoLaunchedRef.current = true;
+
+    // Pequeno delay para garantir que a tela está montada no Android
+    const timer = setTimeout(() => {
+      launchNativeCamera();
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [status, processedResult, capturedPages.length, launchNativeCamera, hasAutoLaunchedRef]);
 
   // Valida o limite do plano gratuito antes de disparar a captura
   const handleCapturePress = async () => {
@@ -168,6 +125,8 @@ export default function ScannerScreen() {
       );
       return;
     }
+
+    // No modo nativo, captureDocument redireciona automaticamente para launchNativeCamera
     await captureDocument();
   };
 
@@ -205,7 +164,6 @@ export default function ScannerScreen() {
             touches[0].pageX - touches[1].pageX,
             touches[0].pageY - touches[1].pageY
           );
-          // Se o segundo dedo tocou após o grant inicial:
           if (!initialPinchDistRef.current || initialPinchDistRef.current === 0) {
             initialPinchDistRef.current = dist;
             initialPinchScaleRef.current = zoomScale;
@@ -263,7 +221,7 @@ export default function ScannerScreen() {
       return;
     }
 
-    // Validação de Limite do Plano Gratuito (Fase 9) para NOVOS documentos
+    // Validação de Limite do Plano Gratuito para NOVOS documentos
     if (!isPro && documents.length >= 5) {
       Alert.alert(
         'Limite do Plano Gratuito',
@@ -315,20 +273,121 @@ export default function ScannerScreen() {
 
   const totalPagesCount = capturedPages.length + (processedResult ? 1 : 0);
 
-  return (
-    <View
-      style={styles.container}
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        if (width > 0 && height > 0) {
-          setContainerSize({ width, height });
-        }
-      }}
-    >
-      {/* Visualizador Seguro da Câmera com Error Boundary contra falhas de hardware */}
+  // =====================================================================
+  // TELA PRINCIPAL DO SCANNER (Camera-Native-First)
+  // =====================================================================
+
+  // Se estamos no modo NATIVO (padrão), mostramos uma tela de "ponto de partida"
+  // com os botões de ação principais. A câmera nativa do sistema abre automaticamente.
+  const renderNativeModeScreen = () => (
+    <View style={styles.container}>
+      <View style={styles.nativeModeBackground}>
+        {/* Ícone/Visual central */}
+        <View style={styles.nativeModeIconCircle}>
+          <Ionicons name="scan-outline" size={56} color={colors.primary} />
+        </View>
+
+        <Text style={styles.nativeModeTitle}>ScanPro</Text>
+        <Text style={styles.nativeModeSubtitle}>
+          Digitalize documentos com qualidade profissional
+        </Text>
+
+        {/* Contador de páginas capturadas */}
+        {totalPagesCount > 0 && (
+          <View style={styles.nativeModePagesChip}>
+            <Ionicons name="documents" size={16} color={colors.primary} />
+            <Text style={styles.nativeModePagesText}>
+              {totalPagesCount} {totalPagesCount === 1 ? 'página capturada' : 'páginas capturadas'}
+            </Text>
+          </View>
+        )}
+
+        {/* Banner de Destino: Adicionando a projeto existente */}
+        {targetDoc && (
+          <View style={styles.nativeModeTargetBanner}>
+            <Ionicons name="folder-open" size={16} color="#00E5FF" />
+            <Text style={styles.nativeModeTargetText} numberOfLines={1}>
+              Adicionando ao projeto: <Text style={{ fontWeight: '700' }}>{targetDoc.title}</Text>
+            </Text>
+          </View>
+        )}
+
+        {/* Ações Principais */}
+        <View style={styles.nativeModeActions}>
+          {/* Botão Principal: Escanear com Câmera */}
+          <TouchableOpacity
+            style={styles.nativeModePrimaryButton}
+            onPress={handleCapturePress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="camera" size={24} color="#FFFFFF" />
+            <Text style={styles.nativeModePrimaryText}>Escanear Documento</Text>
+          </TouchableOpacity>
+
+          {/* Botão Secundário: Importar da Galeria */}
+          <TouchableOpacity
+            style={styles.nativeModeSecondaryButton}
+            onPress={pickFromGallery}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="images-outline" size={22} color={colors.primary} />
+            <Text style={styles.nativeModeSecondaryText}>Importar da Galeria</Text>
+          </TouchableOpacity>
+
+          {/* Botão Terciário: Câmera Embutida (Avançado) */}
+          {Platform.OS !== 'web' && (
+            <TouchableOpacity
+              style={styles.nativeModeTertiaryButton}
+              onPress={enableEmbeddedCamera}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="videocam-outline" size={18} color="#94A3B8" />
+              <Text style={styles.nativeModeTertiaryText}>Câmera Avançada (Embutida)</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Botão Concluir (se já tiver páginas) */}
+        {totalPagesCount > 0 && (
+          <TouchableOpacity
+            style={styles.nativeModeFinishButton}
+            onPress={handleFinishScan}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
+            <Text style={styles.nativeModeFinishText}>
+              Concluir ({totalPagesCount} {totalPagesCount === 1 ? 'Página' : 'Páginas'})
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Botão de Voltar */}
+      <SafeAreaView style={styles.nativeModeBackSafe} pointerEvents="box-none">
+        <TouchableOpacity
+          style={styles.nativeModeBackButton}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+      </SafeAreaView>
+    </View>
+  );
+
+  // =====================================================================
+  // TELA DA CÂMERA EMBUTIDA (modo avançado, sob demanda)
+  // =====================================================================
+
+  const renderEmbeddedModeScreen = () => (
+    <View style={styles.container}>
+      {/* Visualizador da Câmera Embutida com Error Boundary */}
       <CameraErrorBoundary
         onRetry={resetScanner}
-        onLaunchNativeCamera={launchNativeCamera}
+        onLaunchNativeCamera={() => {
+          switchToNativeCamera();
+          launchNativeCamera();
+        }}
         onPickFromGallery={pickFromGallery}
         onGoBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
       >
@@ -339,7 +398,7 @@ export default function ScannerScreen() {
             onCameraReady={handleCameraReady}
             onMountError={handleMountError}
           />
-        ) : isFocused && isMountDelayPassed && containerSize && containerSize.width > 0 ? (
+        ) : (
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
@@ -352,19 +411,14 @@ export default function ScannerScreen() {
             enableTorch={flash === 'on'}
             onCameraReady={handleCameraReady}
             onMountError={(err) => {
-              console.warn('Erro de montagem da câmera:', err);
+              console.warn('Erro de montagem da câmera embutida:', err);
               handleMountError(err);
             }}
           />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.cameraPlaceholderText}>Calibrando sensor de alta definição...</Text>
-          </View>
         )}
       </CameraErrorBoundary>
 
-      {/* Camada de Overlay e Detecção Visual com Efeito Laser Transitório */}
+      {/* Camada de Overlay e Detecção Visual */}
       <ScannerOverlay
         status={status}
         confidence={confidence}
@@ -384,17 +438,17 @@ export default function ScannerScreen() {
           </TouchableOpacity>
 
           <View style={styles.topRightControls}>
-            {/* Botão Câmera Nativa do Celular (100% de compatibilidade em qualquer Android) */}
-            {Platform.OS !== 'web' && (
-              <TouchableOpacity
-                style={styles.circleButton}
-                onPress={launchNativeCamera}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                accessibilityLabel="Abrir Câmera do Celular"
-              >
-                <Ionicons name="camera" size={22} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
+            {/* Botão para voltar ao modo nativo (estável) */}
+            <TouchableOpacity
+              style={styles.circleButton}
+              onPress={() => {
+                switchToNativeCamera();
+              }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Voltar para Câmera Nativa"
+            >
+              <Ionicons name="phone-portrait-outline" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
 
             {/* Botão de Alternar Câmera (Frontal / Traseira) */}
             <TouchableOpacity
@@ -430,15 +484,21 @@ export default function ScannerScreen() {
           </View>
         </View>
 
-        {/* Banner de Contingência se a câmera embutida reportar qualquer restrição */}
+        {/* Banner de erro da câmera embutida */}
         {cameraError && (
           <View style={styles.cameraErrorBanner}>
             <Ionicons name="warning-outline" size={20} color="#FBBF24" style={{ marginRight: 8 }} />
             <Text style={styles.cameraErrorBannerText} numberOfLines={2}>
               {cameraError}
             </Text>
-            <TouchableOpacity style={styles.cameraErrorBannerBtn} onPress={launchNativeCamera}>
-              <Text style={styles.cameraErrorBannerBtnText}>Câmera do Celular</Text>
+            <TouchableOpacity
+              style={styles.cameraErrorBannerBtn}
+              onPress={() => {
+                switchToNativeCamera();
+                launchNativeCamera();
+              }}
+            >
+              <Text style={styles.cameraErrorBannerBtnText}>Câmera Nativa</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -484,10 +544,25 @@ export default function ScannerScreen() {
           </View>
         </View>
       </SafeAreaView>
+    </View>
+  );
+
+  // =====================================================================
+  // RENDER PRINCIPAL — Escolhe entre modo nativo e embutido
+  // =====================================================================
+
+  // Se estiver no estado de "captura bem sucedida" com preview, mostramos o modal de preview
+  // independente do modo de câmera
+  const isInPreviewMode = status === 'CAPTURE_SUCCESS' && processedResult !== null;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Tela base: modo nativo (padrão) ou embutido (avançado) */}
+      {cameraMode === 'embedded' ? renderEmbeddedModeScreen() : renderNativeModeScreen()}
 
       {/* Modal / Tela Cheia de Prévia pós-captura com visualização expandida e seleção de filtros */}
       <Modal
-        visible={status === 'CAPTURE_SUCCESS' && processedResult !== null}
+        visible={isInPreviewMode}
         animationType="fade"
         transparent={false}
         onRequestClose={retakeCurrentPage}
@@ -819,7 +894,7 @@ export default function ScannerScreen() {
         onCancel={() => setIsCropModalVisible(false)}
       />
 
-      {/* Modal de Assinatura Pro (Fase 9) */}
+      {/* Modal de Assinatura Pro */}
       <PaywallModal
         visible={isPaywallVisible}
         onClose={closePaywall}
@@ -930,6 +1005,169 @@ const styles = StyleSheet.create({
         }
       : {}),
   },
+
+  // ========================
+  // Estilos do Modo Nativo (Tela de Ponto de Partida)
+  // ========================
+  nativeModeBackground: {
+    flex: 1,
+    backgroundColor: '#0B1324',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.large,
+  },
+  nativeModeIconCircle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    borderWidth: 2,
+    borderColor: 'rgba(0, 122, 255, 0.30)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.large,
+  },
+  nativeModeTitle: {
+    ...typography.title1,
+    color: '#FFFFFF',
+    fontWeight: '800',
+    marginBottom: spacing.compact,
+    textAlign: 'center',
+  },
+  nativeModeSubtitle: {
+    ...typography.body,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.large,
+    maxWidth: 300,
+  },
+  nativeModePagesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.compact,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    borderRadius: radii.capsule,
+    paddingHorizontal: spacing.default,
+    paddingVertical: 8,
+    marginBottom: spacing.default,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.25)',
+  },
+  nativeModePagesText: {
+    ...typography.subheadline,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  nativeModeTargetBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    backgroundColor: 'rgba(11, 19, 36, 0.90)',
+    borderRadius: radii.capsule,
+    paddingHorizontal: spacing.default,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.45)',
+    marginBottom: spacing.large,
+  },
+  nativeModeTargetText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontSize: 12,
+  },
+  nativeModeActions: {
+    width: '100%',
+    maxWidth: 340,
+    gap: spacing.small,
+  },
+  nativeModePrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.compact,
+    backgroundColor: colors.primary,
+    height: 56,
+    borderRadius: radii.standard,
+    ...shadows.card,
+  },
+  nativeModePrimaryText: {
+    ...typography.headline,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  nativeModeSecondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.compact,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    height: 52,
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  nativeModeSecondaryText: {
+    ...typography.headline,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  nativeModeTertiaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.compact,
+    height: 44,
+    borderRadius: radii.standard,
+    marginTop: spacing.compact,
+  },
+  nativeModeTertiaryText: {
+    ...typography.caption,
+    color: '#64748B',
+    fontWeight: '500',
+    fontSize: 13,
+  },
+  nativeModeFinishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.compact,
+    backgroundColor: colors.success,
+    height: 52,
+    borderRadius: radii.standard,
+    marginTop: spacing.large,
+    width: '100%',
+    maxWidth: 340,
+    ...shadows.card,
+  },
+  nativeModeFinishText: {
+    ...typography.headline,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  nativeModeBackSafe: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  nativeModeBackButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.default,
+    marginTop: spacing.small,
+  },
+
+  // ========================
+  // Estilos da Câmera Embutida (herdados da versão anterior)
+  // ========================
   targetProjectBanner: {
     marginHorizontal: spacing.default,
     marginTop: spacing.small,

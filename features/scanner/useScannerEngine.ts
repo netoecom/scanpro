@@ -9,11 +9,25 @@ import { OcrService } from '../../services/ocr/ocrService';
 import { WebCameraViewRef } from '../../components/scanner/WebCameraView';
 import { TelemetryService } from '../../services/telemetry';
 
+/**
+ * Modo de câmera ativo no scanner.
+ * - 'native': usa a câmera do sistema operacional via ImagePicker (100% estável em qualquer Android)
+ * - 'embedded': usa a CameraView do expo-camera embutida na tela (avançado, pode crashar em alguns dispositivos)
+ */
+export type CameraMode = 'native' | 'embedded';
+
 export function useScannerEngine() {
+  // --- Permissões (lazy — só checamos quando o usuário pede a câmera embutida) ---
   const [nativePermission, requestNativePermission] = useCameraPermissions();
   const [webPermissionGranted, setWebPermissionGranted] = useState<boolean | null>(
     Platform.OS === 'web' ? null : null
   );
+
+  // --- Modo de câmera ativo ---
+  const [cameraMode, setCameraMode] = useState<CameraMode>('native');
+  const [embeddedCameraRequested, setEmbeddedCameraRequested] = useState(false);
+
+  // --- Estados do scanner ---
   const [status, setStatus] = useState<ScannerStatus>('SCANNER_SEARCHING');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -32,6 +46,9 @@ export function useScannerEngine() {
   const webCameraRef = useRef<WebCameraViewRef | null>(null);
   const autoCaptureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Flag para controlar se o auto-launch nativo já foi disparado nesta sessão
+  const hasAutoLaunchedRef = useRef(false);
+
   // Trigger feedback tátil
   const triggerHaptic = useCallback(async () => {
     if (Platform.OS !== 'web') {
@@ -43,13 +60,12 @@ export function useScannerEngine() {
     }
   }, []);
 
-  // Monitorar permissão no navegador (Web/PWA)
+  // --- Permissão Web (apenas para PWA/navegador) ---
   useEffect(() => {
     if (Platform.OS !== 'web') {
       return;
     }
 
-    // No Web/PWA: Checa estado da permissão de câmera sem disparar dialog prematuro
     let isMounted = true;
     if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
       navigator.permissions
@@ -61,7 +77,6 @@ export function useScannerEngine() {
           } else if (statusObj.state === 'denied') {
             setWebPermissionGranted(false);
           } else {
-            // 'prompt' -> permite que WebCameraView inicialize diretamente para exibir o diálogo nativo do navegador
             setWebPermissionGranted(true);
           }
 
@@ -80,8 +95,9 @@ export function useScannerEngine() {
     return () => {
       isMounted = false;
     };
-  }, [nativePermission, requestNativePermission]);
+  }, []);
 
+  // --- Solicitar permissão explícita (só necessário para câmera embutida) ---
   const requestPermission = useCallback(async () => {
     if (Platform.OS === 'web') {
       try {
@@ -117,9 +133,8 @@ export function useScannerEngine() {
   }, []);
 
   const handleMountError = useCallback((error: any) => {
-    console.warn('Erro ao inicializar câmera:', error);
+    console.warn('Erro ao inicializar câmera embutida:', error);
     const errName = error?.name || '';
-    const errMsg = error?.message || '';
     if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
       setWebPermissionGranted(false);
       setCameraError(
@@ -130,12 +145,17 @@ export function useScannerEngine() {
     } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
       setCameraError('A câmera está sendo utilizada por outro aplicativo.');
     } else {
-      setCameraError('Não foi possível iniciar a câmera neste momento. Tente novamente ou use a galeria.');
+      setCameraError('Não foi possível iniciar a câmera embutida. Use a câmera do celular para continuar.');
     }
+    // Fallback automático para câmera nativa em caso de erro na embutida
+    setCameraMode('native');
+    setEmbeddedCameraRequested(false);
   }, []);
 
   // Simulação inteligente de detecção contínua de documento com cooldown
+  // Só ativa quando no modo embutido
   useEffect(() => {
+    if (cameraMode !== 'embedded') return;
     if (status === 'CAPTURING' || status === 'PROCESSING' || status === 'CAPTURE_SUCCESS') {
       return;
     }
@@ -146,7 +166,7 @@ export function useScannerEngine() {
     }, 1100);
 
     return () => clearTimeout(timer);
-  }, [status]);
+  }, [status, cameraMode]);
 
   // Executa o processamento real da imagem através da esteira de processamento e OCR
   const processCapturedImage = useCallback(
@@ -205,16 +225,46 @@ export function useScannerEngine() {
     [filterMode, activeCorners, triggerHaptic]
   );
 
-  // Captura manual ou disparada pelo motor
+  // --- MÉTODO PRIMÁRIO: Câmera nativa do sistema operacional (100% estável) ---
+  const launchNativeCamera = useCallback(async (): Promise<string | null> => {
+    try {
+      TelemetryService.track('capture', { source: 'native_system_camera' });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.95,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setRawCapturedUri(uri);
+        const detection = await EdgeDetector.detectDocumentCorners(uri);
+        setActiveCorners(detection.corners);
+        await processCapturedImage(uri, filterMode, detection.corners);
+        return uri;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Falha ao abrir câmera nativa do sistema:', err);
+      return null;
+    }
+  }, [filterMode, processCapturedImage]);
+
+  // --- MÉTODO SECUNDÁRIO: Captura via CameraView embutida (avançado) ---
   const captureDocument = useCallback(async (): Promise<string | null> => {
     if (status === 'CAPTURING' || status === 'PROCESSING') {
       return null;
     }
 
+    // Se estamos no modo nativo, redireciona para a câmera do sistema
+    if (cameraMode === 'native') {
+      return launchNativeCamera();
+    }
+
     try {
       setStatus('CAPTURING');
       triggerHaptic();
-      TelemetryService.track('capture');
+      TelemetryService.track('capture', { source: 'embedded_camera' });
 
       let photoUri: string | null = null;
 
@@ -267,10 +317,11 @@ export function useScannerEngine() {
       setStatus('CAPTURE_ERROR');
       return null;
     }
-  }, [status, triggerHaptic, processCapturedImage, filterMode]);
+  }, [status, cameraMode, triggerHaptic, processCapturedImage, filterMode, launchNativeCamera]);
 
-  // Disparo automático quando o documento está estabilizado
+  // Disparo automático quando o documento está estabilizado (apenas modo embutido)
   useEffect(() => {
+    if (cameraMode !== 'embedded') return;
     if (autoCapture && status === 'DOCUMENT_DETECTED') {
       autoCaptureTimerRef.current = setTimeout(() => {
         captureDocument();
@@ -282,9 +333,9 @@ export function useScannerEngine() {
         clearTimeout(autoCaptureTimerRef.current);
       }
     };
-  }, [autoCapture, status, captureDocument]);
+  }, [autoCapture, status, captureDocument, cameraMode]);
 
-  // Alterar modo de filtro dinamicamente na tela de preview (Auto, P&B, Cinza, Cores Vivas, Original)
+  // Alterar modo de filtro dinamicamente na tela de preview
   const changeFilterMode = useCallback(
     async (newMode: ScanFilterMode) => {
       setFilterMode(newMode);
@@ -332,30 +383,32 @@ export function useScannerEngine() {
     }
   }, [filterMode, processCapturedImage]);
 
-  // Disparar Câmera Nativa do Sistema Operacional (Hardware oficial Motorola/Android com 100% de estabilidade)
-  const launchNativeCamera = useCallback(async (): Promise<string | null> => {
-    try {
-      TelemetryService.track('capture', { source: 'native_system_camera' });
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.95,
-        allowsEditing: false,
-      });
+  // --- Ativar câmera embutida (avançado, sob demanda) ---
+  const enableEmbeddedCamera = useCallback(async () => {
+    setEmbeddedCameraRequested(true);
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        setRawCapturedUri(uri);
-        const detection = await EdgeDetector.detectDocumentCorners(uri);
-        setActiveCorners(detection.corners);
-        await processCapturedImage(uri, filterMode, detection.corners);
-        return uri;
+    // Solicitar permissão se ainda não tiver
+    if (Platform.OS !== 'web' && !nativePermission?.granted) {
+      const result = await requestNativePermission();
+      if (!result.granted) {
+        setCameraError('Permissão de câmera necessária para usar a câmera embutida.');
+        setEmbeddedCameraRequested(false);
+        return;
       }
-      return null;
-    } catch (err) {
-      console.warn('Falha ao abrir câmera nativa do sistema:', err);
-      return null;
     }
-  }, [filterMode, processCapturedImage]);
+
+    setCameraMode('embedded');
+    setCameraError(null);
+    setIsCameraReady(false);
+  }, [nativePermission, requestNativePermission]);
+
+  // --- Voltar para modo nativo ---
+  const switchToNativeCamera = useCallback(() => {
+    setCameraMode('native');
+    setEmbeddedCameraRequested(false);
+    setIsCameraReady(false);
+    setCameraError(null);
+  }, []);
 
   const addCurrentPageToDocument = useCallback(() => {
     if (processedResult) {
@@ -385,18 +438,21 @@ export function useScannerEngine() {
     setRawCapturedUri(null);
     setProcessedResult(null);
     setConfidence(0);
+    setCameraError(null);
   }, []);
 
   return {
     cameraRef,
     webCameraRef,
     status,
-    isPermissionLoading:
-      Platform.OS === 'web' ? false : nativePermission === null,
+    // Permissão: no modo nativo, sempre consideramos que tem permissão (ImagePicker gerencia internamente)
+    isPermissionLoading: false,
     hasPermission:
       Platform.OS === 'web'
         ? webPermissionGranted !== false
-        : (nativePermission?.granted ?? false),
+        : cameraMode === 'native'
+          ? true
+          : (nativePermission?.granted ?? false),
     canAskAgain:
       Platform.OS === 'web'
         ? true
@@ -426,5 +482,10 @@ export function useScannerEngine() {
     resetScanner,
     activeCorners,
     applyCustomCrop,
+    // Novos exports para controle de modo
+    cameraMode,
+    enableEmbeddedCamera,
+    switchToNativeCamera,
+    hasAutoLaunchedRef,
   };
 }
