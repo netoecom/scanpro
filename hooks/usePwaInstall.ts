@@ -15,7 +15,13 @@ export function usePwaInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    // No nativo, o app já está instalado — marca como instalado
+    if (Platform.OS !== 'web') {
+      setIsInstalled(true);
+      return;
+    }
+
+    if (typeof window === 'undefined') {
       return;
     }
 

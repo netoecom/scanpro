@@ -10,6 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScannerStatus } from '../../types';
 import { colors, spacing, radii, typography } from '../../theme';
 
@@ -27,6 +28,7 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
   capturedImageUri = null,
 }) => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Área útil vertical entre controles superiores (~90px) e inferiores (~160px)
   const availableVertical = Math.max(340, screenHeight - 250);
@@ -189,9 +191,9 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
         pointerEvents="none"
       />
 
-      {/* 2. Pílula de Instrução Superior */}
+      {/* 2. Pílula de Instrução Superior com Margem Segura */}
       {!isScanning && (
-        <View style={styles.topInstructionContainer}>
+        <View style={[styles.topInstructionContainer, { top: Math.max(insets.top + 60, 92) }]}>
           <View style={[styles.instructionPill, isDetected && styles.instructionPillDetected]}>
             <View
               style={[

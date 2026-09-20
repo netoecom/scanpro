@@ -1,5 +1,5 @@
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { Platform } from 'react-native';
+import { Platform, Image as RNImage } from 'react-native';
 import { CornerPoints } from '../../types';
 import { EdgeDetector } from './edgeDetection';
 
@@ -11,7 +11,45 @@ export interface CropRect {
 }
 
 /**
- * Calcula o retângulo delimitador com margens naturais a partir dos 4 cantos
+ * Obtém as dimensões reais da imagem de forma segura e de alta fidelidade
+ */
+export async function getImageDimensions(uri: string): Promise<{ width: number; height: number }> {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        resolve({
+          width: img.naturalWidth || img.width || 1200,
+          height: img.naturalHeight || img.height || 1600,
+        });
+      };
+      img.onerror = () => resolve({ width: 1200, height: 1600 });
+      img.src = uri;
+    });
+  }
+
+  // No nativo, manipular sem ações é a forma mais rápida e precisa de obter a resolução nativa do sensor
+  try {
+    const info = await manipulateAsync(uri, [], { format: SaveFormat.JPEG });
+    if (info.width && info.height) {
+      return { width: info.width, height: info.height };
+    }
+  } catch {
+    // Fallback silencioso para Image.getSize
+  }
+
+  return new Promise((resolve) => {
+    RNImage.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      () => resolve({ width: 1200, height: 1600 })
+    );
+  });
+}
+
+/**
+ * Calcula o retângulo delimitador a partir dos 4 cantos reais
  */
 export function calculateBoundingCrop(
   corners: CornerPoints,
@@ -35,39 +73,68 @@ export function calculateBoundingCrop(
 }
 
 /**
- * Executa o corte e retificação de proporção da página de documento
+ * Executa o corte e retificação de proporção da página de documento.
+ * Se nenhum canto customizado for passado ou se cobrir a foto completa,
+ * a imagem original é 100% preservada sem cortes ou zooms automáticos.
  */
 export async function correctPerspectiveAndCrop(
   uri: string,
   corners?: CornerPoints | null
 ): Promise<{ uri: string; width: number; height: number; corners: CornerPoints }> {
-  // No ambiente Web, executa o crop diretamente via Canvas 2D de alta fidelidade
+  // 1. Obter dimensões reais da imagem capturada
+  const { width: origW, height: origH } = await getImageDimensions(uri);
+
+  // 2. Se os cantos forem nulos ou representarem a imagem quase inteira (97%+),
+  // PRESERVAR A IMAGEM ORIGINAL SEM RECORTAR! Zero zoom falso!
+  const isFullImage =
+    !corners ||
+    (corners.topLeft.x <= origW * 0.03 &&
+      corners.topLeft.y <= origH * 0.03 &&
+      corners.bottomRight.x >= origW * 0.97 &&
+      corners.bottomRight.y >= origH * 0.97);
+
+  if (isFullImage) {
+    const fullCorners = EdgeDetector.createFullCorners(origW, origH);
+    return {
+      uri,
+      width: origW,
+      height: origH,
+      corners: fullCorners,
+    };
+  }
+
+  // 3. Caso o usuário tenha ajustado cantos manualmente no CropEditorModal:
+  const crop = calculateBoundingCrop(corners, origW, origH);
+
+  // Se o crop delimitado cobre mais de 98% da imagem, também não recorta
+  if (crop.width >= origW * 0.98 && crop.height >= origH * 0.98) {
+    return {
+      uri,
+      width: origW,
+      height: origH,
+      corners,
+    };
+  }
+
+  // Ambiente Web
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-
       img.onload = () => {
-        const origW = img.naturalWidth || img.width || 1200;
-        const origH = img.naturalHeight || img.height || 1600;
-
-        const effectiveCorners = corners || EdgeDetector.createDefaultCorners(origW, origH);
-        const crop = calculateBoundingCrop(effectiveCorners, origW, origH);
-
         const canvas = document.createElement('canvas');
         canvas.width = crop.width;
         canvas.height = crop.height;
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve({ uri, width: origW, height: origH, corners: effectiveCorners });
+          resolve({ uri, width: origW, height: origH, corners });
           return;
         }
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // Desenha a fatia recortada do documento
         ctx.drawImage(
           img,
           crop.originX,
@@ -85,32 +152,22 @@ export async function correctPerspectiveAndCrop(
           uri: croppedDataUrl,
           width: crop.width,
           height: crop.height,
-          corners: effectiveCorners,
+          corners,
         });
       };
-
       img.onerror = () => {
-        resolve({
-          uri,
-          width: 1200,
-          height: 1600,
-          corners: corners || EdgeDetector.createDefaultCorners(1200, 1600),
-        });
+        resolve({ uri, width: origW, height: origH, corners });
       };
-
       img.src = uri;
     });
   }
 
-  // No ambiente Nativo (iOS/Android):
-  const fallbackCorners = corners || EdgeDetector.createDefaultCorners(1200, 1600);
-  const crop = calculateBoundingCrop(fallbackCorners, 1200, 1600);
-
+  // Ambiente Nativo (Android / iOS):
   const result = await manipulateAsync(
     uri,
     [{ crop }],
     {
-      compress: 0.92,
+      compress: 0.94,
       format: SaveFormat.JPEG,
     }
   );
@@ -119,6 +176,6 @@ export async function correctPerspectiveAndCrop(
     uri: result.uri,
     width: result.width,
     height: result.height,
-    corners: fallbackCorners,
+    corners,
   };
 }

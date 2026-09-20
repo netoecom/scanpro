@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
   Animated,
   Easing,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../theme';
@@ -24,6 +24,7 @@ let hasShownSessionIntro = false;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { documents, loadDocuments, toggleFavorite, deleteDocument } = useDocumentStore();
   const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { isInstalled } = usePwaInstall();
@@ -89,11 +90,16 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 16) }]}>
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <View style={styles.container}>
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingHorizontal: Math.max(insets.left, insets.right, 20),
+              },
+            ]}
             showsVerticalScrollIndicator={false}
           >
             {/* Header com saudação e título */}
@@ -225,7 +231,7 @@ export default function HomeScreen() {
 
       {/* Animação Introdutória Homogênea e Moderna ao Abrir o App */}
       {showIntroSplash && <ModernIntroSplash onFinish={handleIntroFinish} />}
-    </SafeAreaView>
+    </View>
   );
 }
 

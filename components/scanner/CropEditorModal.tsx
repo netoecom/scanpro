@@ -1,19 +1,9 @@
-/**
- * ScanPro — CropEditorModal
- * Editor visual interativo de altíssima precisão para ajuste fino dos 4 cantos e recorte de documento.
- * - Mapeamento 1:1 pixel a pixel com captura contínua de ponteiro (zero perda de cursor).
- * - Renderização gráfica em 60fps com máscara escura, quadrilátero real e grade de terços.
- * - Lupa de Precisão (Magnifier 2.5x) com retícula de mira nos vértices do documento.
- * - Suporte a arrastar cantos individuais, arestas completas ou reposicionar o corpo inteiro.
- */
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
-  SafeAreaView,
   TouchableOpacity,
   Image,
   PanResponder,
@@ -21,7 +11,9 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { CornerPoints, Point } from '../../types';
 import { EdgeDetector } from '../../services/processing/edgeDetection';
 import { colors, spacing, radii, typography, touchTarget } from '../../theme';
@@ -34,24 +26,11 @@ interface CropEditorModalProps {
   onCancel: () => void;
 }
 
-type DragTarget =
-  | 'topLeft'
-  | 'topRight'
-  | 'bottomRight'
-  | 'bottomLeft'
-  | 'edgeTop'
-  | 'edgeRight'
-  | 'edgeBottom'
-  | 'edgeLeft'
-  | 'body'
-  | null;
+type CornerKey = 'topLeft' | 'topRight' | 'bottomRight' | 'bottomLeft';
+const CORNER_KEYS: CornerKey[] = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 
-interface PixelCorners {
-  topLeft: Point;
-  topRight: Point;
-  bottomRight: Point;
-  bottomLeft: Point;
-}
+const HANDLE_SIZE = 32;
+const TOUCH_AREA_SIZE = 56;
 
 export const CropEditorModal: React.FC<CropEditorModalProps> = ({
   visible,
@@ -61,10 +40,11 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
   onCancel,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-  // Dimensões naturais da imagem original
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [isDetecting, setIsDetecting] = useState<boolean>(false);
+  const [activeHandle, setActiveHandle] = useState<CornerKey | 'center' | null>(null);
 
   // Cantos normalizados em porcentagem (0 a 100)
   const [cornersPercent, setCornersPercent] = useState<{
@@ -73,41 +53,17 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
     bottomRight: Point;
     bottomLeft: Point;
   }>({
-    topLeft: { x: 5, y: 5 },
-    topRight: { x: 95, y: 5 },
-    bottomRight: { x: 95, y: 95 },
-    bottomLeft: { x: 5, y: 95 },
+    topLeft: { x: 8, y: 8 },
+    topRight: { x: 92, y: 8 },
+    bottomRight: { x: 92, y: 92 },
+    bottomLeft: { x: 8, y: 92 },
   });
 
-  // Estado transitório de arraste mantido em ref para ultra performance (60fps)
-  const activeDragRef = useRef<{
-    target: DragTarget;
-    startX: number;
-    startY: number;
-    lastX: number;
-    lastY: number;
-    initialCorners: PixelCorners;
-  }>({
-    target: null,
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    initialCorners: {
-      topLeft: { x: 0, y: 0 },
-      topRight: { x: 0, y: 0 },
-      bottomRight: { x: 0, y: 0 },
-      bottomLeft: { x: 0, y: 0 },
-    },
-  });
-
-  // Referência para o container da imagem e canvas overlay
-  const containerRef = useRef<any>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const htmlImageRef = useRef<HTMLImageElement | null>(null);
+  const cornersRef = useRef(cornersPercent);
+  cornersRef.current = cornersPercent;
 
   // Dimensões úteis do visor mantendo aspecto da imagem
-  const editorAvailableHeight = Math.max(300, windowHeight - 210);
+  const editorAvailableHeight = Math.max(320, windowHeight - 240);
   const editorAvailableWidth = Math.max(280, windowWidth - 32);
 
   let displayW = editorAvailableWidth;
@@ -122,31 +78,13 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
     }
   }
 
-  // Converte cantos em porcentagem para coordenadas em pixels da tela
-  const getPixelCorners = useCallback(
-    (cp: typeof cornersPercent, w: number, h: number): PixelCorners => {
-      return {
-        topLeft: { x: (cp.topLeft.x / 100) * w, y: (cp.topLeft.y / 100) * h },
-        topRight: { x: (cp.topRight.x / 100) * w, y: (cp.topRight.y / 100) * h },
-        bottomRight: { x: (cp.bottomRight.x / 100) * w, y: (cp.bottomRight.y / 100) * h },
-        bottomLeft: { x: (cp.bottomLeft.x / 100) * w, y: (cp.bottomLeft.y / 100) * h },
-      };
-    },
-    []
-  );
-
-  // Carrega imagem no DOM para renderização de alta resolução na lupa
-  useEffect(() => {
-    if (Platform.OS === 'web' && imageUri) {
-      const img = new (window as any).Image();
-      img.crossOrigin = 'anonymous';
-      img.src = imageUri;
-      img.onload = () => {
-        htmlImageRef.current = img;
-        drawCanvasOverlay();
-      };
+  const triggerHaptic = useCallback(async () => {
+    if (Platform.OS !== 'web') {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {}
     }
-  }, [imageUri]);
+  }, []);
 
   // Carrega dimensões naturais da foto
   useEffect(() => {
@@ -158,10 +96,22 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
         setImageSize({ width: w, height: h });
         if (initialCorners) {
           setCornersPercent({
-            topLeft: { x: (initialCorners.topLeft.x / w) * 100, y: (initialCorners.topLeft.y / h) * 100 },
-            topRight: { x: (initialCorners.topRight.x / w) * 100, y: (initialCorners.topRight.y / h) * 100 },
-            bottomRight: { x: (initialCorners.bottomRight.x / w) * 100, y: (initialCorners.bottomRight.y / h) * 100 },
-            bottomLeft: { x: (initialCorners.bottomLeft.x / w) * 100, y: (initialCorners.bottomLeft.y / h) * 100 },
+            topLeft: {
+              x: Math.max(0, Math.min(100, (initialCorners.topLeft.x / w) * 100)),
+              y: Math.max(0, Math.min(100, (initialCorners.topLeft.y / h) * 100)),
+            },
+            topRight: {
+              x: Math.max(0, Math.min(100, (initialCorners.topRight.x / w) * 100)),
+              y: Math.max(0, Math.min(100, (initialCorners.topRight.y / h) * 100)),
+            },
+            bottomRight: {
+              x: Math.max(0, Math.min(100, (initialCorners.bottomRight.x / w) * 100)),
+              y: Math.max(0, Math.min(100, (initialCorners.bottomRight.y / h) * 100)),
+            },
+            bottomLeft: {
+              x: Math.max(0, Math.min(100, (initialCorners.bottomLeft.x / w) * 100)),
+              y: Math.max(0, Math.min(100, (initialCorners.bottomLeft.y / h) * 100)),
+            },
           });
         } else {
           const def = EdgeDetector.createDefaultCorners(w, h);
@@ -179,534 +129,132 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
     );
   }, [visible, imageUri, initialCorners]);
 
-  // Função central de renderização do Canvas Overlay com Lupa e Máscara
-  const drawCanvasOverlay = useCallback(
-    (customPixelCorners?: PixelCorners, activeTarget?: DragTarget) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // Cria um PanResponder dedicado para um canto específico
+  const createCornerPanResponder = (corner: CornerKey) => {
+    const startPosRef = { current: { x: 0, y: 0 } };
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startPosRef.current = { ...cornersRef.current[corner] };
+        setActiveHandle(corner);
+        triggerHaptic();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (displayW <= 0 || displayH <= 0) return;
+        const deltaXPct = (gestureState.dx / displayW) * 100;
+        const deltaYPct = (gestureState.dy / displayH) * 100;
 
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = displayW * dpr;
-      canvas.height = displayH * dpr;
-      ctx.scale(dpr, dpr);
+        const newX = Math.max(0, Math.min(100, parseFloat((startPosRef.current.x + deltaXPct).toFixed(1))));
+        const newY = Math.max(0, Math.min(100, parseFloat((startPosRef.current.y + deltaYPct).toFixed(1))));
 
-      const corners = customPixelCorners || getPixelCorners(cornersPercent, displayW, displayH);
-      const tl = corners.topLeft;
-      const tr = corners.topRight;
-      const br = corners.bottomRight;
-      const bl = corners.bottomLeft;
-
-      // 1. Limpa canvas
-      ctx.clearRect(0, 0, displayW, displayH);
-
-      // 2. Máscara Escura: escurece tudo fora do quadrilátero
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
-      ctx.fillRect(0, 0, displayW, displayH);
-
-      // Apaga o interior do quadrilátero selecionado para destacar o documento
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      ctx.moveTo(tl.x, tl.y);
-      ctx.lineTo(tr.x, tr.y);
-      ctx.lineTo(br.x, br.y);
-      ctx.lineTo(bl.x, bl.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      // 3. Grade de Terços interna sutil (Rule of Thirds)
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-
-      for (let i = 1; i <= 2; i++) {
-        const t = i / 3;
-        // Linhas horizontais
-        const hStart = { x: tl.x + (bl.x - tl.x) * t, y: tl.y + (bl.y - tl.y) * t };
-        const hEnd = { x: tr.x + (br.x - tr.x) * t, y: tr.y + (br.y - tr.y) * t };
-        ctx.beginPath();
-        ctx.moveTo(hStart.x, hStart.y);
-        ctx.lineTo(hEnd.x, hEnd.y);
-        ctx.stroke();
-
-        // Linhas verticais
-        const vStart = { x: tl.x + (tr.x - tl.x) * t, y: tl.y + (tr.y - tl.y) * t };
-        const vEnd = { x: bl.x + (br.x - bl.x) * t, y: bl.y + (br.y - bl.y) * t };
-        ctx.beginPath();
-        ctx.moveTo(vStart.x, vStart.y);
-        ctx.lineTo(vEnd.x, vEnd.y);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // 4. Contorno Principal do Quadrilátero
-      ctx.save();
-      ctx.strokeStyle = '#0066CC';
-      ctx.lineWidth = 2.5;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.shadowColor = 'rgba(0, 102, 204, 0.5)';
-      ctx.shadowBlur = 6;
-      ctx.beginPath();
-      ctx.moveTo(tl.x, tl.y);
-      ctx.lineTo(tr.x, tr.y);
-      ctx.lineTo(br.x, br.y);
-      ctx.lineTo(bl.x, bl.y);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
-
-      // 5. Alças das 4 Arestas (Pontos Médios)
-      const edges = [
-        { key: 'edgeTop', p1: tl, p2: tr },
-        { key: 'edgeRight', p1: tr, p2: br },
-        { key: 'edgeBottom', p1: bl, p2: br },
-        { key: 'edgeLeft', p1: tl, p2: bl },
-      ];
-
-      edges.forEach(({ key, p1, p2 }) => {
-        const midX = (p1.x + p2.x) / 2;
-        const midY = (p1.y + p2.y) / 2;
-        const isEdgeActive = activeTarget === key;
-
-        ctx.save();
-        ctx.fillStyle = isEdgeActive ? '#0066CC' : '#FFFFFF';
-        ctx.strokeStyle = '#0066CC';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(midX, midY, isEdgeActive ? 7 : 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      });
-
-      // 6. Alças dos 4 Cantos (Handles Circulares)
-      const cornerList: { key: DragTarget; p: Point }[] = [
-        { key: 'topLeft', p: tl },
-        { key: 'topRight', p: tr },
-        { key: 'bottomRight', p: br },
-        { key: 'bottomLeft', p: bl },
-      ];
-
-      cornerList.forEach(({ key, p }) => {
-        const isActive = activeTarget === key;
-
-        ctx.save();
-        // Glow / Halo quando ativo
-        if (isActive) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 22, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 102, 204, 0.35)';
-          ctx.fill();
-        }
-
-        // Círculo base externo
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, isActive ? 15 : 13, 0, Math.PI * 2);
-        ctx.fillStyle = '#0066CC';
-        ctx.fill();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-        ctx.shadowBlur = 5;
-        ctx.stroke();
-
-        // Ponto central brilhante
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // 7. Lupa de Precisão Cirúrgica (Magnifier / Loupe 2.5x)
-      if (
-        activeTarget &&
-        ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'].includes(activeTarget) &&
-        htmlImageRef.current
-      ) {
-        const activePoint = corners[activeTarget as keyof PixelCorners];
-        const loupeRadius = 52;
-        const zoom = 2.5;
-
-        // Posicionamento inteligente da lupa: 75px acima do ponto
-        let loupeX = activePoint.x;
-        let loupeY = activePoint.y - 80;
-
-        // Se estiver muito próximo do topo, inverte para baixo
-        if (loupeY - loupeRadius < 10) {
-          loupeY = activePoint.y + 80;
-        }
-        // Limita dentro das laterais do canvas
-        loupeX = Math.max(loupeRadius + 10, Math.min(displayW - loupeRadius - 10, loupeX));
-
-        const img = htmlImageRef.current;
-        const origW = img.naturalWidth || imageSize?.width || 1200;
-        const origH = img.naturalHeight || imageSize?.height || 1600;
-
-        // Converte ponto da tela para coordenadas da imagem original
-        const origX = (activePoint.x / displayW) * origW;
-        const origY = (activePoint.y / displayH) * origH;
-
-        ctx.save();
-        // Sombra da Lupa
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-        ctx.shadowBlur = 14;
-        ctx.shadowOffsetY = 6;
-
-        // Máscara circular da lupa
-        ctx.beginPath();
-        ctx.arc(loupeX, loupeY, loupeRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#0F172A';
-        ctx.fill();
-        ctx.clip();
-
-        // Desenha imagem original ampliada em 2.5x
-        const sampleSize = (loupeRadius * 2) / zoom;
-        const sampleOrigW = (sampleSize / displayW) * origW;
-        const sampleOrigH = (sampleSize / displayH) * origH;
-
-        ctx.drawImage(
-          img,
-          origX - sampleOrigW / 2,
-          origY - sampleOrigH / 2,
-          sampleOrigW,
-          sampleOrigH,
-          loupeX - loupeRadius,
-          loupeY - loupeRadius,
-          loupeRadius * 2,
-          loupeRadius * 2
-        );
-
-        // Mira central (*Crosshair*)
-        ctx.strokeStyle = '#38BDF8';
-        ctx.lineWidth = 1.5;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 2;
-
-        // Linha horizontal
-        ctx.beginPath();
-        ctx.moveTo(loupeX - loupeRadius, loupeY);
-        ctx.lineTo(loupeX + loupeRadius, loupeY);
-        ctx.stroke();
-
-        // Linha vertical
-        ctx.beginPath();
-        ctx.moveTo(loupeX, loupeY - loupeRadius);
-        ctx.lineTo(loupeX, loupeY + loupeRadius);
-        ctx.stroke();
-
-        // Círculo central da mira
-        ctx.beginPath();
-        ctx.arc(loupeX, loupeY, 4, 0, Math.PI * 2);
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        ctx.restore();
-
-        // Anel externo branco da Lupa
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(loupeX, loupeY, loupeRadius, 0, Math.PI * 2);
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.stroke();
-
-        // Badge indicador de precisão
-        ctx.fillStyle = '#0066CC';
-        ctx.beginPath();
-        ctx.roundRect(loupeX - 30, loupeY + loupeRadius + 6, 60, 18, 9);
-        ctx.fill();
-
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.textAlign = 'center';
-        ctx.fillText('2.5x ZOOM', loupeX, loupeY + loupeRadius + 19);
-        ctx.restore();
-      }
-    },
-    [displayW, displayH, cornersPercent, getPixelCorners, imageSize]
-  );
-
-  // Redesenha sempre que os cantos em porcentagem mudarem ou a tela redimensionar
-  useEffect(() => {
-    drawCanvasOverlay();
-  }, [drawCanvasOverlay]);
-
-  // Função para identificar o elemento clicado com base nas coordenadas em pixels da tela
-  const getHitTarget = (x: number, y: number, corners: PixelCorners): DragTarget => {
-    const handleHitRadius = 36;
-
-    if (Math.hypot(x - corners.topLeft.x, y - corners.topLeft.y) <= handleHitRadius) return 'topLeft';
-    if (Math.hypot(x - corners.topRight.x, y - corners.topRight.y) <= handleHitRadius) return 'topRight';
-    if (Math.hypot(x - corners.bottomRight.x, y - corners.bottomRight.y) <= handleHitRadius) return 'bottomRight';
-    if (Math.hypot(x - corners.bottomLeft.x, y - corners.bottomLeft.y) <= handleHitRadius) return 'bottomLeft';
-
-    // Arestas
-    const distToSegment = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
-      const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
-      if (l2 === 0) return Math.hypot(px - x1, py - y1);
-      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
-      t = Math.max(0, Math.min(1, t));
-      return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
-    };
-
-    const edgeHitRadius = 22;
-    if (distToSegment(x, y, corners.topLeft.x, corners.topLeft.y, corners.topRight.x, corners.topRight.y) <= edgeHitRadius)
-      return 'edgeTop';
-    if (
-      distToSegment(x, y, corners.topRight.x, corners.topRight.y, corners.bottomRight.x, corners.bottomRight.y) <=
-      edgeHitRadius
-    )
-      return 'edgeRight';
-    if (
-      distToSegment(x, y, corners.bottomLeft.x, corners.bottomLeft.y, corners.bottomRight.x, corners.bottomRight.y) <=
-      edgeHitRadius
-    )
-      return 'edgeBottom';
-    if (
-      distToSegment(x, y, corners.topLeft.x, corners.topLeft.y, corners.bottomLeft.x, corners.bottomLeft.y) <=
-      edgeHitRadius
-    )
-      return 'edgeLeft';
-
-    // Dentro do polígono (para mover todo o corpo)
-    const isInsidePolygon = (px: number, py: number, pts: Point[]) => {
-      let inside = false;
-      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const xi = pts[i].x,
-          yi = pts[i].y;
-        const xj = pts[j].x,
-          yj = pts[j].y;
-        const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
-        if (intersect) inside = !inside;
-      }
-      return inside;
-    };
-
-    if (isInsidePolygon(x, y, [corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft])) {
-      return 'body';
-    }
-
-    // Se clicou fora, busca o canto mais próximo e já o ativa
-    const distances = [
-      { key: 'topLeft' as DragTarget, d: Math.hypot(x - corners.topLeft.x, y - corners.topLeft.y) },
-      { key: 'topRight' as DragTarget, d: Math.hypot(x - corners.topRight.x, y - corners.topRight.y) },
-      { key: 'bottomRight' as DragTarget, d: Math.hypot(x - corners.bottomRight.x, y - corners.bottomRight.y) },
-      { key: 'bottomLeft' as DragTarget, d: Math.hypot(x - corners.bottomLeft.x, y - corners.bottomLeft.y) },
-    ];
-    distances.sort((a, b) => a.d - b.d);
-    return distances[0].key;
+        setCornersPercent((prev) => ({
+          ...prev,
+          [corner]: { x: newX, y: newY },
+        }));
+      },
+      onPanResponderRelease: () => {
+        setActiveHandle(null);
+      },
+      onPanResponderTerminate: () => {
+        setActiveHandle(null);
+      },
+    });
   };
 
-  // Handlers de Ponteiro Nativos Web com captura contínua e precisão 1:1
-  const handlePointerDown = (e: any) => {
-    if (Platform.OS !== 'web' || !containerRef.current) return;
+  // PanResponder individual para cada um dos 4 cantos
+  const tlPan = useRef(createCornerPanResponder('topLeft')).current;
+  const trPan = useRef(createCornerPanResponder('topRight')).current;
+  const brPan = useRef(createCornerPanResponder('bottomRight')).current;
+  const blPan = useRef(createCornerPanResponder('bottomLeft')).current;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = Math.max(0, Math.min(displayW, e.clientX - rect.left));
-    const clickY = Math.max(0, Math.min(displayH, e.clientY - rect.top));
+  // PanResponder central para arrastar todo o retângulo de recorte junto
+  const centerStartRef = useRef<{
+    tl: Point;
+    tr: Point;
+    br: Point;
+    bl: Point;
+  }>({
+    tl: { x: 0, y: 0 },
+    tr: { x: 0, y: 0 },
+    br: { x: 0, y: 0 },
+    bl: { x: 0, y: 0 },
+  });
 
-    const currentPixelCorners = getPixelCorners(cornersPercent, displayW, displayH);
-    const target = getHitTarget(clickX, clickY, currentPixelCorners);
-
-    if (!target) return;
-
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch {
-      // safe fallback
-    }
-
-    activeDragRef.current = {
-      target,
-      startX: clickX,
-      startY: clickY,
-      lastX: clickX,
-      lastY: clickY,
-      initialCorners: { ...currentPixelCorners },
-    };
-
-    // Se for canto individual, mapeia imediatamente 1:1 para onde foi clicado
-    if (['topLeft', 'topRight', 'bottomRight', 'bottomLeft'].includes(target)) {
-      const updated = {
-        ...currentPixelCorners,
-        [target]: { x: clickX, y: clickY },
-      };
-      drawCanvasOverlay(updated, target);
-    } else {
-      drawCanvasOverlay(currentPixelCorners, target);
-    }
-  };
-
-  const handlePointerMove = (e: any) => {
-    if (Platform.OS !== 'web' || !containerRef.current) return;
-    const { target, startX, startY, initialCorners } = activeDragRef.current;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const currX = Math.max(0, Math.min(displayW, e.clientX - rect.left));
-    const currY = Math.max(0, Math.min(displayH, e.clientY - rect.top));
-
-    // Se não estiver arrastando, atualiza o cursor CSS correspondente
-    if (!target) {
-      const currentPixelCorners = getPixelCorners(cornersPercent, displayW, displayH);
-      const hoverTarget = getHitTarget(currX, currY, currentPixelCorners);
-      if (['topLeft', 'bottomRight'].includes(hoverTarget as string)) {
-        containerRef.current.style.cursor = 'nwse-resize';
-      } else if (['topRight', 'bottomLeft'].includes(hoverTarget as string)) {
-        containerRef.current.style.cursor = 'nesw-resize';
-      } else if (['edgeTop', 'edgeBottom'].includes(hoverTarget as string)) {
-        containerRef.current.style.cursor = 'ns-resize';
-      } else if (['edgeRight', 'edgeLeft'].includes(hoverTarget as string)) {
-        containerRef.current.style.cursor = 'ew-resize';
-      } else if (hoverTarget === 'body') {
-        containerRef.current.style.cursor = 'move';
-      } else {
-        containerRef.current.style.cursor = 'crosshair';
-      }
-      return;
-    }
-
-    const deltaX = currX - startX;
-    const deltaY = currY - startY;
-
-    let updated: PixelCorners = { ...initialCorners };
-
-    if (['topLeft', 'topRight', 'bottomRight', 'bottomLeft'].includes(target)) {
-      // Mapeamento 1:1 Pixel a Pixel direto
-      updated[target as keyof PixelCorners] = { x: currX, y: currY };
-    } else if (target === 'edgeTop') {
-      const clampedY = Math.max(0, Math.min(displayH, initialCorners.topLeft.y + deltaY));
-      updated.topLeft = { ...initialCorners.topLeft, y: clampedY };
-      updated.topRight = { ...initialCorners.topRight, y: clampedY };
-    } else if (target === 'edgeBottom') {
-      const clampedY = Math.max(0, Math.min(displayH, initialCorners.bottomLeft.y + deltaY));
-      updated.bottomLeft = { ...initialCorners.bottomLeft, y: clampedY };
-      updated.bottomRight = { ...initialCorners.bottomRight, y: clampedY };
-    } else if (target === 'edgeLeft') {
-      const clampedX = Math.max(0, Math.min(displayW, initialCorners.topLeft.x + deltaX));
-      updated.topLeft = { ...initialCorners.topLeft, x: clampedX };
-      updated.bottomLeft = { ...initialCorners.bottomLeft, x: clampedX };
-    } else if (target === 'edgeRight') {
-      const clampedX = Math.max(0, Math.min(displayW, initialCorners.topRight.x + deltaX));
-      updated.topRight = { ...initialCorners.topRight, x: clampedX };
-      updated.bottomRight = { ...initialCorners.bottomRight, x: clampedX };
-    } else if (target === 'body') {
-      const minX = Math.min(initialCorners.topLeft.x, initialCorners.bottomLeft.x);
-      const maxX = Math.max(initialCorners.topRight.x, initialCorners.bottomRight.x);
-      const minY = Math.min(initialCorners.topLeft.y, initialCorners.topRight.y);
-      const maxY = Math.max(initialCorners.bottomLeft.y, initialCorners.bottomRight.y);
-
-      const boundDeltaX = Math.max(-minX, Math.min(displayW - maxX, deltaX));
-      const boundDeltaY = Math.max(-minY, Math.min(displayH - maxY, deltaY));
-
-      updated = {
-        topLeft: { x: initialCorners.topLeft.x + boundDeltaX, y: initialCorners.topLeft.y + boundDeltaY },
-        topRight: { x: initialCorners.topRight.x + boundDeltaX, y: initialCorners.topRight.y + boundDeltaY },
-        bottomRight: { x: initialCorners.bottomRight.x + boundDeltaX, y: initialCorners.bottomRight.y + boundDeltaY },
-        bottomLeft: { x: initialCorners.bottomLeft.x + boundDeltaX, y: initialCorners.bottomLeft.y + boundDeltaY },
-      };
-    }
-
-    // Redesenha instantaneamente a 60fps no canvas
-    drawCanvasOverlay(updated, target);
-
-    // Salva o estado atualizado em ref
-    activeDragRef.current.lastX = currX;
-    activeDragRef.current.lastY = currY;
-    (activeDragRef.current as any).currentWorkingCorners = updated;
-  };
-
-  const handlePointerUp = (e: any) => {
-    if (Platform.OS !== 'web') return;
-    const { target } = activeDragRef.current;
-    if (!target) return;
-
-    try {
-      e.currentTarget.releasePointerCapture?.(e.pointerId);
-    } catch {
-      // safe fallback
-    }
-
-    const working = (activeDragRef.current as any).currentWorkingCorners;
-    if (working) {
-      setCornersPercent({
-        topLeft: { x: (working.topLeft.x / displayW) * 100, y: (working.topLeft.y / displayH) * 100 },
-        topRight: { x: (working.topRight.x / displayW) * 100, y: (working.topRight.y / displayH) * 100 },
-        bottomRight: { x: (working.bottomRight.x / displayW) * 100, y: (working.bottomRight.y / displayH) * 100 },
-        bottomLeft: { x: (working.bottomLeft.x / displayW) * 100, y: (working.bottomLeft.y / displayH) * 100 },
-      });
-    }
-
-    activeDragRef.current.target = null;
-    drawCanvasOverlay(working || undefined, null);
-  };
-
-  // PanResponder Unificado para Plataformas Nativas (Mobile iOS/Android)
-  const panResponder = useRef(
+  const centerPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const touch = evt.nativeEvent;
-        const currentPixelCorners = getPixelCorners(cornersPercent, displayW, displayH);
-        const target = getHitTarget(touch.locationX, touch.locationY, currentPixelCorners);
-
-        activeDragRef.current = {
-          target,
-          startX: touch.locationX,
-          startY: touch.locationY,
-          lastX: touch.locationX,
-          lastY: touch.locationY,
-          initialCorners: { ...currentPixelCorners },
+      onPanResponderGrant: () => {
+        const c = cornersRef.current;
+        centerStartRef.current = {
+          tl: { ...c.topLeft },
+          tr: { ...c.topRight },
+          br: { ...c.bottomRight },
+          bl: { ...c.bottomLeft },
         };
+        setActiveHandle('center');
+        triggerHaptic();
       },
-      onPanResponderMove: (evt, gestureState) => {
-        const { target, initialCorners } = activeDragRef.current;
-        if (!target) return;
+      onPanResponderMove: (_, gestureState) => {
+        if (displayW <= 0 || displayH <= 0) return;
+        const dxPct = (gestureState.dx / displayW) * 100;
+        const dyPct = (gestureState.dy / displayH) * 100;
+        const s = centerStartRef.current;
 
-        const currX = Math.max(0, Math.min(displayW, activeDragRef.current.startX + gestureState.dx));
-        const currY = Math.max(0, Math.min(displayH, activeDragRef.current.startY + gestureState.dy));
+        // Limita o deslocamento para não sair das bordas da imagem
+        const minX = Math.min(s.tl.x, s.bl.x);
+        const maxX = Math.max(s.tr.x, s.br.x);
+        const minY = Math.min(s.tl.y, s.tr.y);
+        const maxY = Math.max(s.bl.y, s.br.y);
 
-        let updated: PixelCorners = { ...initialCorners };
-
-        if (['topLeft', 'topRight', 'bottomRight', 'bottomLeft'].includes(target)) {
-          updated[target as keyof PixelCorners] = { x: currX, y: currY };
-        }
+        const clampedDx = Math.max(-minX, Math.min(100 - maxX, dxPct));
+        const clampedDy = Math.max(-minY, Math.min(100 - maxY, dyPct));
 
         setCornersPercent({
-          topLeft: { x: (updated.topLeft.x / displayW) * 100, y: (updated.topLeft.y / displayH) * 100 },
-          topRight: { x: (updated.topRight.x / displayW) * 100, y: (updated.topRight.y / displayH) * 100 },
-          bottomRight: { x: (updated.bottomRight.x / displayW) * 100, y: (updated.bottomRight.y / displayH) * 100 },
-          bottomLeft: { x: (updated.bottomLeft.x / displayW) * 100, y: (updated.bottomLeft.y / displayH) * 100 },
+          topLeft: { x: s.tl.x + clampedDx, y: s.tl.y + clampedDy },
+          topRight: { x: s.tr.x + clampedDx, y: s.tr.y + clampedDy },
+          bottomRight: { x: s.br.x + clampedDx, y: s.br.y + clampedDy },
+          bottomLeft: { x: s.bl.x + clampedDx, y: s.bl.y + clampedDy },
         });
       },
       onPanResponderRelease: () => {
-        activeDragRef.current.target = null;
+        setActiveHandle(null);
+      },
+      onPanResponderTerminate: () => {
+        setActiveHandle(null);
       },
     })
   ).current;
 
-  // Ações Rápidas da Barra de Ferramentas
+  // Ações Rápidas
   const handleAutoDetect = async () => {
     if (!imageUri || !imageSize) return;
     setIsDetecting(true);
     try {
       const detection = await EdgeDetector.detectDocumentCorners(imageUri);
-      if (detection.corners) {
+      if (detection.corners && imageSize.width > 0 && imageSize.height > 0) {
         const c = detection.corners;
         setCornersPercent({
-          topLeft: { x: (c.topLeft.x / imageSize.width) * 100, y: (c.topLeft.y / imageSize.height) * 100 },
-          topRight: { x: (c.topRight.x / imageSize.width) * 100, y: (c.topRight.y / imageSize.height) * 100 },
-          bottomRight: { x: (c.bottomRight.x / imageSize.width) * 100, y: (c.bottomRight.y / imageSize.height) * 100 },
-          bottomLeft: { x: (c.bottomLeft.x / imageSize.width) * 100, y: (c.bottomLeft.y / imageSize.height) * 100 },
+          topLeft: {
+            x: Math.max(0, Math.min(100, (c.topLeft.x / imageSize.width) * 100)),
+            y: Math.max(0, Math.min(100, (c.topLeft.y / imageSize.height) * 100)),
+          },
+          topRight: {
+            x: Math.max(0, Math.min(100, (c.topRight.x / imageSize.width) * 100)),
+            y: Math.max(0, Math.min(100, (c.topRight.y / imageSize.height) * 100)),
+          },
+          bottomRight: {
+            x: Math.max(0, Math.min(100, (c.bottomRight.x / imageSize.width) * 100)),
+            y: Math.max(0, Math.min(100, (c.bottomRight.y / imageSize.height) * 100)),
+          },
+          bottomLeft: {
+            x: Math.max(0, Math.min(100, (c.bottomLeft.x / imageSize.width) * 100)),
+            y: Math.max(0, Math.min(100, (c.bottomLeft.y / imageSize.height) * 100)),
+          },
         });
+        triggerHaptic();
       }
     } finally {
       setIsDetecting(false);
@@ -722,6 +270,7 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
       bottomRight: { x: (def.bottomRight.x / imageSize.width) * 100, y: (def.bottomRight.y / imageSize.height) * 100 },
       bottomLeft: { x: (def.bottomLeft.x / imageSize.width) * 100, y: (def.bottomLeft.y / imageSize.height) * 100 },
     });
+    triggerHaptic();
   };
 
   const handleSetFull = () => {
@@ -731,6 +280,7 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
       bottomRight: { x: 100, y: 100 },
       bottomLeft: { x: 0, y: 100 },
     });
+    triggerHaptic();
   };
 
   const handleReset = () => {
@@ -744,9 +294,9 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
     } else {
       handleSetA4();
     }
+    triggerHaptic();
   };
 
-  // Aplica o recorte convertendo as coordenadas finais para pixels reais da imagem original
   const handleConfirm = () => {
     if (!imageSize) return;
     const origW = imageSize.width;
@@ -771,6 +321,7 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
       },
     };
 
+    triggerHaptic();
     onApplyCrop(corners);
   };
 
@@ -778,17 +329,45 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
     return null;
   }
 
+  // Posições em pixel na tela
+  const pxTL = { x: (cornersPercent.topLeft.x / 100) * displayW, y: (cornersPercent.topLeft.y / 100) * displayH };
+  const pxTR = { x: (cornersPercent.topRight.x / 100) * displayW, y: (cornersPercent.topRight.y / 100) * displayH };
+  const pxBR = { x: (cornersPercent.bottomRight.x / 100) * displayW, y: (cornersPercent.bottomRight.y / 100) * displayH };
+  const pxBL = { x: (cornersPercent.bottomLeft.x / 100) * displayW, y: (cornersPercent.bottomLeft.y / 100) * displayH };
+
+  // Retângulo delimitador para a máscara de recorte
+  const boxLeft = Math.min(pxTL.x, pxBL.x);
+  const boxRight = Math.max(pxTR.x, pxBR.x);
+  const boxTop = Math.min(pxTL.y, pxTR.y);
+  const boxBottom = Math.max(pxBL.y, pxBR.y);
+  const boxW = Math.max(20, boxRight - boxLeft);
+  const boxH = Math.max(20, boxBottom - boxTop);
+
+  const activeColor = '#00E5FF';
+  const normalColor = '#0088FF';
+  const borderColor = activeHandle ? activeColor : normalColor;
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onCancel}>
-      <SafeAreaView style={styles.container}>
-        {/* Header Elegante */}
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            paddingBottom: Math.max(insets.bottom, 16),
+            paddingLeft: Math.max(insets.left, 16),
+            paddingRight: Math.max(insets.right, 16),
+          },
+        ]}
+      >
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.titleWrap}>
             <Text style={styles.title}>Ajustar Recorte</Text>
-            <Text style={styles.subtitle}>Arraste os cantos com precisão pixel a pixel</Text>
+            <Text style={styles.subtitle}>Toque e arraste os cantos com precisão</Text>
           </View>
           <TouchableOpacity style={styles.confirmSmallBtn} onPress={handleConfirm}>
             <Text style={styles.confirmSmallText}>Pronto</Text>
@@ -799,48 +378,32 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
         <View style={styles.presetsRow}>
           <TouchableOpacity style={styles.presetChip} onPress={handleAutoDetect} disabled={isDetecting}>
             {isDetecting ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color="#00E5FF" />
             ) : (
-              <Ionicons name="sparkles" size={14} color={colors.primary} />
+              <Ionicons name="sparkles" size={15} color="#00E5FF" />
             )}
-            <Text style={styles.presetChipText}>Auto Detectar</Text>
+            <Text style={[styles.presetChipText, { color: '#00E5FF', fontWeight: '700' }]}>Auto Detectar</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.presetChip} onPress={handleSetA4}>
-            <Ionicons name="document-text-outline" size={14} color="#94A3B8" />
+            <Ionicons name="document-text-outline" size={15} color="#94A3B8" />
             <Text style={styles.presetChipText}>A4 Padrão</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.presetChip} onPress={handleSetFull}>
-            <Ionicons name="expand-outline" size={14} color="#94A3B8" />
+            <Ionicons name="expand-outline" size={15} color="#94A3B8" />
             <Text style={styles.presetChipText}>Foto Inteira</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.presetChip} onPress={handleReset}>
-            <Ionicons name="refresh-outline" size={14} color="#94A3B8" />
+            <Ionicons name="refresh-outline" size={15} color="#94A3B8" />
             <Text style={styles.presetChipText}>Resetar</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Área Central Interativa de Recorte com Canvas Overlay */}
+        {/* Área Central Interativa de Recorte */}
         <View style={styles.editorArea}>
-          <View
-            ref={containerRef}
-            {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            style={[
-              styles.canvasWrapper,
-              {
-                width: displayW,
-                height: displayH,
-                touchAction: 'none',
-                userSelect: 'none',
-              } as any,
-            ]}
-          >
+          <View style={[styles.canvasWrapper, { width: displayW, height: displayH }]}>
             {/* Foto base capturada */}
             <Image
               source={{ uri: imageUri }}
@@ -848,20 +411,140 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
               resizeMode="contain"
             />
 
-            {/* Canvas Overlay de 60fps para Máscara, Quadrilátero, Alças e Lupa */}
-            {Platform.OS === 'web' && (
-              <canvas
-                ref={canvasRef}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: displayW,
-                  height: displayH,
-                  pointerEvents: 'none',
-                }}
-              />
-            )}
+            {/* Máscara de 4 lados para criar um recorte 100% nítido no documento */}
+            {/* Topo */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: boxTop,
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              }}
+            />
+            {/* Base */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: boxBottom,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              }}
+            />
+            {/* Esquerda */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: boxTop,
+                left: 0,
+                width: boxLeft,
+                height: boxH,
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              }}
+            />
+            {/* Direita */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: boxTop,
+                left: boxRight,
+                right: 0,
+                height: boxH,
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              }}
+            />
+
+            {/* Área interna do recorte com PanResponder para arrasto do bloco todo */}
+            <View
+              {...centerPan.panHandlers}
+              style={{
+                position: 'absolute',
+                left: boxLeft,
+                top: boxTop,
+                width: boxW,
+                height: boxH,
+                borderWidth: 2,
+                borderColor: borderColor,
+                backgroundColor: 'transparent',
+              }}
+            >
+              {/* Grade de terços para alinhamento profissional */}
+              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '33.3%', height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '66.6%', height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: '33.3%', width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: '66.6%', width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+            </View>
+
+            {/* Handle Canto Superior Esquerdo (TopLeft) */}
+            <View
+              {...tlPan.panHandlers}
+              style={[
+                styles.handleTouchArea,
+                {
+                  left: pxTL.x - TOUCH_AREA_SIZE / 2,
+                  top: pxTL.y - TOUCH_AREA_SIZE / 2,
+                },
+              ]}
+            >
+              <View style={[styles.cornerHandle, activeHandle === 'topLeft' && styles.cornerHandleActive]}>
+                <View style={styles.handleInnerDot} />
+              </View>
+            </View>
+
+            {/* Handle Canto Superior Direito (TopRight) */}
+            <View
+              {...trPan.panHandlers}
+              style={[
+                styles.handleTouchArea,
+                {
+                  left: pxTR.x - TOUCH_AREA_SIZE / 2,
+                  top: pxTR.y - TOUCH_AREA_SIZE / 2,
+                },
+              ]}
+            >
+              <View style={[styles.cornerHandle, activeHandle === 'topRight' && styles.cornerHandleActive]}>
+                <View style={styles.handleInnerDot} />
+              </View>
+            </View>
+
+            {/* Handle Canto Inferior Direito (BottomRight) */}
+            <View
+              {...brPan.panHandlers}
+              style={[
+                styles.handleTouchArea,
+                {
+                  left: pxBR.x - TOUCH_AREA_SIZE / 2,
+                  top: pxBR.y - TOUCH_AREA_SIZE / 2,
+                },
+              ]}
+            >
+              <View style={[styles.cornerHandle, activeHandle === 'bottomRight' && styles.cornerHandleActive]}>
+                <View style={styles.handleInnerDot} />
+              </View>
+            </View>
+
+            {/* Handle Canto Inferior Esquerdo (BottomLeft) */}
+            <View
+              {...blPan.panHandlers}
+              style={[
+                styles.handleTouchArea,
+                {
+                  left: pxBL.x - TOUCH_AREA_SIZE / 2,
+                  top: pxBL.y - TOUCH_AREA_SIZE / 2,
+                },
+              ]}
+            >
+              <View style={[styles.cornerHandle, activeHandle === 'bottomLeft' && styles.cornerHandleActive]}>
+                <View style={styles.handleInnerDot} />
+              </View>
+            </View>
           </View>
         </View>
 
@@ -872,11 +555,11 @@ export const CropEditorModal: React.FC<CropEditorModalProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.confirmFooterBtn} onPress={handleConfirm}>
-            <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
             <Text style={styles.confirmFooterText}>Aplicar Recorte</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 };
@@ -939,73 +622,109 @@ const styles = StyleSheet.create({
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.compact,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: radii.capsule,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    gap: 5,
   },
   presetChipText: {
     ...typography.caption,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#CBD5E1',
+    fontWeight: '500',
   },
   editorArea: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.default,
+    backgroundColor: '#05080F',
+    padding: spacing.small,
   },
   canvasWrapper: {
     position: 'relative',
-    backgroundColor: '#000000',
-    borderRadius: radii.standard,
     overflow: 'hidden',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.7)',
+    backgroundColor: '#000000',
+    borderRadius: 8,
   },
   image: {
     position: 'absolute',
-    top: 0,
     left: 0,
+    top: 0,
+  },
+  handleTouchArea: {
+    position: 'absolute',
+    width: TOUCH_AREA_SIZE,
+    height: TOUCH_AREA_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  cornerHandle: {
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    backgroundColor: '#0088FF',
+    borderWidth: 3.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+  },
+  cornerHandleActive: {
+    width: HANDLE_SIZE + 8,
+    height: HANDLE_SIZE + 8,
+    borderRadius: (HANDLE_SIZE + 8) / 2,
+    backgroundColor: '#00E5FF',
+    borderColor: '#FFFFFF',
+    borderWidth: 4,
+    elevation: 12,
+  },
+  handleInnerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#FFFFFF',
   },
   footer: {
     flexDirection: 'row',
-    gap: spacing.default,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.default,
     paddingVertical: spacing.default,
+    backgroundColor: '#0A0F1D',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: '#0F172A',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    gap: spacing.default,
   },
   cancelFooterBtn: {
     flex: 1,
-    height: touchTarget.minSize,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.standard,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radii.prominentCards,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   cancelFooterText: {
-    ...typography.subheadline,
-    color: '#FFFFFF',
+    ...typography.body,
+    color: '#94A3B8',
     fontWeight: '600',
   },
   confirmFooterBtn: {
-    flex: 1.5,
+    flex: 1.6,
+    height: 48,
     flexDirection: 'row',
-    height: touchTarget.minSize,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.small,
-    borderRadius: radii.standard,
+    borderRadius: radii.prominentCards,
     backgroundColor: colors.primary,
   },
   confirmFooterText: {
-    ...typography.subheadline,
+    ...typography.body,
     color: '#FFFFFF',
     fontWeight: '700',
   },
 });
-

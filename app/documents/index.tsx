@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
   Modal,
   TextInput,
   Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
@@ -21,6 +21,7 @@ type FilterTab = 'all' | 'favorites';
 
 export default function DocumentsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     documents,
     folders,
@@ -100,8 +101,15 @@ export default function DocumentsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 16) }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            paddingHorizontal: Math.max(insets.left, insets.right, 20),
+          },
+        ]}
+      >
         {/* Header da Tela com Título, Contador e Alternador de Lista/Grade */}
         <View style={styles.header}>
           <View>
@@ -393,7 +401,7 @@ export default function DocumentsScreen() {
       />
 
       <BottomTabBar />
-    </SafeAreaView>
+    </View>
   );
 }
 

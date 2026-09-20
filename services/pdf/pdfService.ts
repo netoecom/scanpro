@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { TelemetryService } from '../telemetry';
+import { base64ToUint8Array, uint8ArrayToBase64 } from '../processing/base64Utils';
 
 export interface GeneratePdfOptions {
   title: string;
@@ -26,13 +27,7 @@ export class PdfService {
   private static async imageUriToUint8Array(uri: string): Promise<Uint8Array> {
     if (uri.startsWith('data:')) {
       const base64Data = uri.split(',')[1];
-      const binaryString = atob(base64Data);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes;
+      return base64ToUint8Array(base64Data);
     }
 
     if (Platform.OS === 'web') {
@@ -43,13 +38,7 @@ export class PdfService {
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      const binaryString = atob(base64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes;
+      return base64ToUint8Array(base64);
     }
   }
 
@@ -131,13 +120,8 @@ export class PdfService {
       const filename = `scanpro_${Date.now()}.pdf`;
       const fileUri = `${FileSystem.documentDirectory || ''}${filename}`;
       
-      // Converte bytes para string base64 para gravação nativa
-      let binary = '';
-      const len = pdfBytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(pdfBytes[i]);
-      }
-      const base64 = btoa(binary);
+      // Converte bytes para string base64 para gravação nativa (100% seguro no Hermes)
+      const base64 = uint8ArrayToBase64(pdfBytes);
 
       await FileSystem.writeAsStringAsync(fileUri, base64, {
         encoding: FileSystem.EncodingType.Base64,

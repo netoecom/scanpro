@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
   Modal,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
@@ -20,9 +20,11 @@ import { AuthService } from '../../services/auth';
 import { SyncService, SyncOverview } from '../../services/sync';
 import { BackupService } from '../../services/backup';
 import { TelemetryService } from '../../services/telemetry';
+import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { documents, loadDocuments, loadFolders } = useDocumentStore();
   const {
     isPro,
@@ -160,8 +162,16 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 16) }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingHorizontal: Math.max(insets.left, insets.right, 20),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.screenTitle}>Ajustes</Text>
 
         {/* Card do Usuário & Autenticação */}
@@ -398,18 +408,20 @@ export default function ProfileScreen() {
           <Text style={styles.sectionHeader}>Sobre o ScanPro</Text>
           <View style={styles.menuCard}>
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Versão do Aplicativo</Text>
-              <Text style={styles.aboutValue}>1.0.1 (Build 2)</Text>
+              <Text style={styles.aboutLabel}>Versão</Text>
+              <Text style={[styles.aboutValue, { flexShrink: 1 }]}>
+                {Constants.expoConfig?.version ?? '1.0.4'} (Build {Constants.expoConfig?.android?.versionCode ?? 6})
+              </Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Segurança dos Dados</Text>
-              <Text style={styles.aboutValue}>100% Local-First (No Aparelho)</Text>
+              <Text style={styles.aboutLabel}>Seus Documentos</Text>
+              <Text style={[styles.aboutValue, { flexShrink: 1, textAlign: 'right' }]}>Ficam salvos no seu celular</Text>
             </View>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Privacidade</Text>
-              <Text style={styles.aboutValue}>Sem Anúncios & Sem Rastreamento</Text>
+              <Text style={[styles.aboutValue, { flexShrink: 1, textAlign: 'right' }]}>Sem anúncios e sem rastreamento</Text>
             </View>
             <View style={styles.rowDivider} />
             <TouchableOpacity
@@ -424,8 +436,8 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Suporte Técnico</Text>
-              <Text style={[styles.aboutValue, { color: colors.primary, fontWeight: '600' }]}>
+              <Text style={styles.aboutLabel}>Suporte</Text>
+              <Text style={[styles.aboutValue, { flexShrink: 1, color: colors.primary, fontWeight: '600' }]}>
                 contato@ecomti.com.br
               </Text>
             </View>
@@ -529,7 +541,7 @@ export default function ProfileScreen() {
         visible={isPaywallVisible}
         onClose={closePaywall}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

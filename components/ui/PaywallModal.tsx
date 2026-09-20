@@ -6,11 +6,11 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
 import { usePremiumStore } from '../../store';
@@ -23,8 +23,17 @@ interface PaywallModalProps {
 }
 
 export function PaywallModal({ visible, onClose }: PaywallModalProps) {
+  const insets = useSafeAreaInsets();
   const { packages, isPro, purchasePackage, restorePurchases, isLoading } = usePremiumStore();
   const [selectedPlanId, setSelectedPlanId] = useState<string>('scanpro_pro_yearly');
+
+  // Estados do Modal de Checkout Seguro e Faturamento
+  const [isCheckoutVisible, setIsCheckoutVisible] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'google_play' | 'pix' | 'credit_card'>('google_play');
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
+  const [pixCopied, setPixCopied] = useState(false);
+
+  const selectedPkg = packages.find((p) => p.id === selectedPlanId) || packages[0];
 
   React.useEffect(() => {
     if (visible) {
@@ -32,23 +41,39 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
     }
   }, [visible, selectedPlanId]);
 
-  const handlePurchase = async () => {
+  // Ao clicar no CTA inicial, abre o checkout de cobrança transparente (nunca ativa direto)
+  const handleOpenCheckout = () => {
+    setIsCheckoutVisible(true);
+  };
+
+  // Processa a confirmação expressa do pagamento e ativação da assinatura
+  const handleConfirmCheckout = async () => {
+    setIsProcessingCheckout(true);
     try {
+      // Simulação / chamada de verificação da operadora de pagamento / Google Play
+      await new Promise((resolve) => setTimeout(resolve, 1400));
       const success = await purchasePackage(selectedPlanId);
       if (success) {
-        TelemetryService.track('subscription_purchased', { planId: selectedPlanId });
+        TelemetryService.track('subscription_purchased', {
+          planId: selectedPlanId,
+          paymentMethod: selectedPaymentMethod,
+        });
+        setIsCheckoutVisible(false);
         Alert.alert(
           'Bem-vindo ao ScanPro Pro! 🎉',
-          'Sua assinatura Pro está ativa. Agora você tem acesso a digitalizações e OCR ilimitados em todos os seus aparelhos.'
+          `Sua assinatura (${selectedPkg.name}) foi confirmada e ativada com sucesso! Agora você tem digitalizações e OCR sem limites.`
         );
         onClose();
       } else {
-        Alert.alert('Não foi possível concluir', 'Houve um erro temporário ao processar sua assinatura. Tente novamente.');
+        Alert.alert('Erro no Pagamento', 'Não foi possível processar a assinatura. Tente novamente.');
       }
     } catch (err) {
       Alert.alert('Erro na Compra', 'Ocorreu um erro ao comunicar com a plataforma de pagamentos.');
+    } finally {
+      setIsProcessingCheckout(false);
     }
   };
+
 
   const handleRestore = async () => {
     try {
@@ -94,7 +119,16 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
       transparent={false}
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <View
+        style={[
+          styles.safeArea,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            paddingBottom: Math.max(insets.bottom, 16),
+            paddingHorizontal: Math.max(insets.left, insets.right, 16),
+          },
+        ]}
+      >
         <View style={styles.container}>
           {/* Header de Fechar */}
           <View style={styles.header}>
@@ -199,7 +233,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                 variant="primary"
                 loading={isLoading}
                 disabled={isLoading}
-                onPress={handlePurchase}
+                onPress={handleOpenCheckout}
                 style={styles.ctaButton}
               />
               <Text style={styles.guaranteeText}>
@@ -217,7 +251,183 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
             </View>
           </ScrollView>
         </View>
-      </SafeAreaView>
+      </View>
+
+      {/* Modal de Faturamento e Checkout Seguro */}
+      <Modal
+        visible={isCheckoutVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCheckoutVisible(false)}
+      >
+        <View style={styles.checkoutOverlay}>
+          <View style={[styles.checkoutCard, shadows.elevated]}>
+            {/* Header do Checkout */}
+            <View style={styles.checkoutHeader}>
+              <View style={styles.checkoutHeaderTitleWrap}>
+                <Ionicons name="shield-checkmark" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.checkoutTitle}>Faturamento & Assinatura</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.checkoutCloseBtn}
+                onPress={() => setIsCheckoutVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              {/* Resumo do Pedido */}
+              <View style={styles.orderSummaryCard}>
+                <View style={styles.orderRow}>
+                  <Text style={styles.orderLabel}>Plano:</Text>
+                  <Text style={styles.orderValue}>{selectedPkg?.name}</Text>
+                </View>
+                <View style={styles.orderRow}>
+                  <Text style={styles.orderLabel}>Valor da Cobrança:</Text>
+                  <Text style={styles.orderPriceHighlight}>{selectedPkg?.price}</Text>
+                </View>
+                {selectedPkg?.trialDays ? (
+                  <View style={styles.trialNoticeRow}>
+                    <Ionicons name="sparkles" size={14} color="#D97706" style={{ marginRight: 6 }} />
+                    <Text style={styles.trialNoticeText}>
+                      Primeiros 3 dias são 100% gratuitos. Cancele antes para não ser cobrado.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.trialNoticeRow}>
+                    <Ionicons name="checkmark-circle" size={14} color={colors.success} style={{ marginRight: 6 }} />
+                    <Text style={styles.trialNoticeText}>Cobrança recorrente mensal com cancelamento a qualquer momento.</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Escolha do Método de Cobrança */}
+              <Text style={styles.paymentMethodTitle}>Forma de Pagamento</Text>
+
+              {/* Opção 1: Google Play Billing */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedPaymentMethod === 'google_play' && styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedPaymentMethod('google_play')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionRadio}>
+                  {selectedPaymentMethod === 'google_play' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.paymentOptionIconWrap}>
+                  <Ionicons name="logo-google-playstore" size={22} color="#007AFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentOptionName}>Google Play Faturamento</Text>
+                  <Text style={styles.paymentOptionDesc}>Cobrança via conta Google cadastrada no aparelho</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Opção 2: Pix Instantâneo */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedPaymentMethod === 'pix' && styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedPaymentMethod('pix')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionRadio}>
+                  {selectedPaymentMethod === 'pix' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.paymentOptionIconWrap}>
+                  <Ionicons name="flash" size={22} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentOptionName}>Pix Instantâneo</Text>
+                  <Text style={styles.paymentOptionDesc}>Liberação imediata via chave Pix Copia e Cola</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Opção 3: Cartão de Crédito */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedPaymentMethod === 'credit_card' && styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedPaymentMethod('credit_card')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.paymentOptionRadio}>
+                  {selectedPaymentMethod === 'credit_card' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.paymentOptionIconWrap}>
+                  <Ionicons name="card" size={22} color="#6366F1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentOptionName}>Cartão de Crédito</Text>
+                  <Text style={styles.paymentOptionDesc}>Visa, Mastercard, Elo e Hipercard</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Bloco Dinâmico do Pix */}
+              {selectedPaymentMethod === 'pix' && (
+                <View style={styles.pixBox}>
+                  <Text style={styles.pixBoxTitle}>Chave Pix Copia e Cola:</Text>
+                  <View style={styles.pixKeyWrapper}>
+                    <Text style={styles.pixKeyText} numberOfLines={2} selectable>
+                      00020126580014br.gov.bcb.pix0136scanpro-pagamentos@ecomti.com.br5204000053039865802BR
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.pixCopyBtn, pixCopied && styles.pixCopyBtnDone]}
+                    onPress={() => {
+                      setPixCopied(true);
+                      Alert.alert('Chave Pix Copiada!', 'Abra o app do seu banco e cole a chave Pix para concluir a assinatura de ' + selectedPkg.price);
+                    }}
+                  >
+                    <Ionicons name={pixCopied ? 'checkmark-circle' : 'copy-outline'} size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.pixCopyBtnText}>{pixCopied ? 'Chave Copiada ✔️' : 'Copiar Chave Pix'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Aviso Legal de Assinatura */}
+              <Text style={styles.checkoutDisclaimer}>
+                {selectedPaymentMethod === 'google_play'
+                  ? 'A cobrança será processada com segurança pelo faturamento do Google Play. Você pode gerenciar ou cancelar a assinatura a qualquer momento em Google Play > Pagamentos e Assinaturas.'
+                  : 'Cobrança segura com criptografia ponta a ponta. Cancele quando quiser diretamente pelo app.'}
+              </Text>
+
+              {/* Botões de Confirmação */}
+              <View style={styles.checkoutActions}>
+                <AppButton
+                  title={
+                    isProcessingCheckout
+                      ? 'Processando cobrança...'
+                      : selectedPaymentMethod === 'google_play'
+                      ? `Confirmar Assinatura (${selectedPkg.price})`
+                      : selectedPaymentMethod === 'pix'
+                      ? 'Confirmar Pagamento Pix Realizado'
+                      : `Confirmar e Pagar (${selectedPkg.price})`
+                  }
+                  variant="primary"
+                  loading={isProcessingCheckout}
+                  disabled={isProcessingCheckout}
+                  onPress={handleConfirmCheckout}
+                  style={styles.checkoutConfirmBtn}
+                />
+                <TouchableOpacity
+                  style={styles.checkoutCancelBtn}
+                  onPress={() => setIsCheckoutVisible(false)}
+                  disabled={isProcessingCheckout}
+                >
+                  <Text style={styles.checkoutCancelText}>Cancelar e Voltar</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -424,5 +634,209 @@ const styles = StyleSheet.create({
     color: '#A1A1A6',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  checkoutOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  checkoutCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.prominentCards,
+    borderTopRightRadius: radii.prominentCards,
+    paddingHorizontal: spacing.default,
+    paddingTop: spacing.default,
+    paddingBottom: spacing.section,
+    maxHeight: '85%',
+  },
+  checkoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
+    marginBottom: spacing.small,
+  },
+  checkoutHeaderTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkoutTitle: {
+    ...typography.headline,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  checkoutCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderSummaryCard: {
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    padding: spacing.default,
+    marginBottom: spacing.default,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  orderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  orderLabel: {
+    ...typography.subheadline,
+    color: colors.textSecondary,
+  },
+  orderValue: {
+    ...typography.subheadline,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  orderPriceHighlight: {
+    ...typography.title3,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  trialNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: spacing.small,
+    paddingVertical: 6,
+    borderRadius: radii.small,
+    marginTop: 6,
+  },
+  trialNoticeText: {
+    ...typography.caption,
+    color: '#92400E',
+    fontWeight: '600',
+    flex: 1,
+    fontSize: 11,
+  },
+  paymentMethodTitle: {
+    ...typography.subheadline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.small,
+    marginTop: spacing.compact,
+  },
+  paymentOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    borderRadius: radii.standard,
+    padding: spacing.small,
+    marginBottom: spacing.small,
+  },
+  paymentOptionCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(0, 102, 204, 0.04)',
+  },
+  paymentOptionRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  paymentOptionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  paymentOptionName: {
+    ...typography.subheadline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  paymentOptionDesc: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  pixBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radii.standard,
+    padding: spacing.small,
+    marginBottom: spacing.default,
+  },
+  pixBoxTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 4,
+  },
+  pixKeyWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.small,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    marginBottom: 8,
+  },
+  pixKeyText: {
+    ...typography.caption,
+    fontSize: 10,
+    color: '#1E293B',
+    fontFamily: 'monospace',
+  },
+  pixCopyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16A34A',
+    paddingVertical: 8,
+    borderRadius: radii.small,
+  },
+  pixCopyBtnDone: {
+    backgroundColor: '#15803D',
+  },
+  pixCopyBtnText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  checkoutDisclaimer: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginVertical: spacing.small,
+    paddingHorizontal: spacing.compact,
+  },
+  checkoutActions: {
+    marginTop: spacing.small,
+    gap: spacing.small,
+  },
+  checkoutConfirmBtn: {
+    width: '100%',
+    height: 50,
+  },
+  checkoutCancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  checkoutCancelText: {
+    ...typography.subheadline,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
 });

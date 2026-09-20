@@ -23,9 +23,16 @@ export function useScannerEngine() {
     Platform.OS === 'web' ? null : null
   );
 
-  // --- Modo de câmera ativo ---
-  const [cameraMode, setCameraMode] = useState<CameraMode>('native');
-  const [embeddedCameraRequested, setEmbeddedCameraRequested] = useState(false);
+  // --- Modo de câmera ativo: Câmera aprimorada (embedded) por padrão absoluto ---
+  const [cameraMode, setCameraMode] = useState<CameraMode>('embedded');
+  const [embeddedCameraRequested, setEmbeddedCameraRequested] = useState(true);
+
+  // Solicitar permissão nativa automaticamente caso ainda não esteja concedida
+  useEffect(() => {
+    if (Platform.OS !== 'web' && nativePermission && !nativePermission.granted && nativePermission.canAskAgain) {
+      requestNativePermission();
+    }
+  }, [nativePermission, requestNativePermission]);
 
   // --- Estados do scanner ---
   const [status, setStatus] = useState<ScannerStatus>('SCANNER_SEARCHING');
@@ -41,6 +48,8 @@ export function useScannerEngine() {
   const [processedResult, setProcessedResult] = useState<ProcessedPageResult | null>(null);
   const [capturedPages, setCapturedPages] = useState<ProcessedPageResult[]>([]);
   const [activeCorners, setActiveCorners] = useState<CornerPoints | null>(null);
+  const [isReviewing, setIsReviewing] = useState<boolean>(false);
+  const [processingMessage, setProcessingMessage] = useState<string | null>(null);
 
   const cameraRef = useRef<CameraView | null>(null);
   const webCameraRef = useRef<WebCameraViewRef | null>(null);
@@ -173,9 +182,14 @@ export function useScannerEngine() {
     async (
       imageUri: string,
       mode: ScanFilterMode = filterMode,
-      cornersOverride?: CornerPoints | null
+      cornersOverride?: CornerPoints | null,
+      customLoadingMsg?: string | null
     ) => {
-      setStatus('PROCESSING');
+      if (customLoadingMsg) {
+        setProcessingMessage(customLoadingMsg);
+      } else {
+        setStatus('PROCESSING');
+      }
       try {
         const cornersToUse = cornersOverride !== undefined ? cornersOverride : activeCorners;
 
@@ -202,6 +216,8 @@ export function useScannerEngine() {
         TelemetryService.track('successful_processing', { filterMode: mode });
         setProcessedResult(result);
         setStatus('CAPTURE_SUCCESS');
+        setIsReviewing(true);
+        setProcessingMessage(null);
         triggerHaptic();
         return result;
       } catch (err) {
@@ -219,6 +235,8 @@ export function useScannerEngine() {
         };
         setProcessedResult(fallbackResult);
         setStatus('CAPTURE_SUCCESS');
+        setIsReviewing(true);
+        setProcessingMessage(null);
         return fallbackResult;
       }
     },
@@ -340,7 +358,16 @@ export function useScannerEngine() {
     async (newMode: ScanFilterMode) => {
       setFilterMode(newMode);
       if (rawCapturedUri) {
-        await processCapturedImage(rawCapturedUri, newMode, activeCorners);
+        const labels: Record<ScanFilterMode, string> = {
+          black_and_white: 'Aplicando filtro P&B Nítido...',
+          grayscale: 'Convertendo para tons de cinza...',
+          color_boost: 'Aprimorando cores do documento...',
+          auto: 'Otimizando contraste e fundo...',
+          original: 'Restaurando foto original...',
+        };
+        const msg = labels[newMode] || 'Processando imagem...';
+        setProcessingMessage(msg);
+        await processCapturedImage(rawCapturedUri, newMode, activeCorners, msg);
       }
     },
     [rawCapturedUri, activeCorners, processCapturedImage]
@@ -351,7 +378,9 @@ export function useScannerEngine() {
     async (newCorners: CornerPoints) => {
       setActiveCorners(newCorners);
       if (rawCapturedUri) {
-        await processCapturedImage(rawCapturedUri, filterMode, newCorners);
+        const msg = 'Ajustando imagem...';
+        setProcessingMessage(msg);
+        await processCapturedImage(rawCapturedUri, filterMode, newCorners, msg);
       }
     },
     [rawCapturedUri, filterMode, processCapturedImage]
@@ -415,6 +444,8 @@ export function useScannerEngine() {
       setCapturedPages((prev) => [...prev, processedResult]);
     }
     setStatus('SCANNER_SEARCHING');
+    setIsReviewing(false);
+    setProcessingMessage(null);
     setRawCapturedUri(null);
     setProcessedResult(null);
   }, [processedResult]);
@@ -429,12 +460,16 @@ export function useScannerEngine() {
 
   const retakeCurrentPage = useCallback(() => {
     setStatus('SCANNER_SEARCHING');
+    setIsReviewing(false);
+    setProcessingMessage(null);
     setRawCapturedUri(null);
     setProcessedResult(null);
   }, []);
 
   const resetScanner = useCallback(() => {
     setStatus('SCANNER_SEARCHING');
+    setIsReviewing(false);
+    setProcessingMessage(null);
     setRawCapturedUri(null);
     setProcessedResult(null);
     setConfidence(0);
@@ -482,7 +517,9 @@ export function useScannerEngine() {
     resetScanner,
     activeCorners,
     applyCustomCrop,
-    // Novos exports para controle de modo
+    // Novos exports para controle de modo e preview
+    isReviewing,
+    processingMessage,
     cameraMode,
     enableEmbeddedCamera,
     switchToNativeCamera,

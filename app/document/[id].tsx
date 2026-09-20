@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -14,6 +13,7 @@ import {
   PanResponder,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
@@ -24,6 +24,7 @@ import { PdfService } from '../../services/pdf/pdfService';
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const {
@@ -43,9 +44,9 @@ export default function DocumentDetailScreen() {
   const [previewZoom, setPreviewZoom] = useState<number>(1);
   const [previewPan, setPreviewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Confirmação para exclusão de projeto ou página individual
+  // Confirmação para exclusão de projeto, página individual ou lote selecionado
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
-    type: 'document' | 'page';
+    type: 'document' | 'page' | 'batch';
     pageId?: string;
     pageIndex?: number;
     title?: string;
@@ -155,7 +156,7 @@ export default function DocumentDetailScreen() {
 
   if (!document) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 16) }]}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Documento não encontrado</Text>
           <AppButton
@@ -165,7 +166,7 @@ export default function DocumentDetailScreen() {
             style={{ marginTop: spacing.default }}
           />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -216,6 +217,14 @@ export default function DocumentDetailScreen() {
     setDeleteConfirmTarget({
       type: 'document',
       title: document.title,
+    });
+  };
+
+  const handleDeleteSelectedBatch = () => {
+    if (selectedPageIds.size === 0 || !id) return;
+    setDeleteConfirmTarget({
+      type: 'batch',
+      title: `${selectedPageIds.size} ${selectedPageIds.size === 1 ? 'página selecionada' : 'páginas selecionadas'}`,
     });
   };
 
@@ -312,9 +321,16 @@ export default function DocumentDetailScreen() {
   const activePreviewPage = previewPageIndex !== null ? currentPages[previewPageIndex] : null;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, 16) }]}>
       {/* Header com Voltar e Ações */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingHorizontal: Math.max(insets.left, insets.right, 20),
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.circleButton}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
@@ -388,6 +404,19 @@ export default function DocumentDetailScreen() {
               <TouchableOpacity onPress={deselectAllPages} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={styles.selectionActionText}>Nenhuma</Text>
               </TouchableOpacity>
+              {selectedPageIds.size > 0 && (
+                <>
+                  <Text style={styles.selectionDivider}>•</Text>
+                  <TouchableOpacity
+                    onPress={handleDeleteSelectedBatch}
+                    style={styles.deleteBatchButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 3 }} />
+                    <Text style={styles.deleteBatchText}>Excluir ({selectedPageIds.size})</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         )}
@@ -442,7 +471,15 @@ export default function DocumentDetailScreen() {
         onRequestClose={() => setPreviewPageIndex(null)}
       >
         <View style={styles.previewModalBackdrop}>
-          <SafeAreaView style={styles.previewModalHeader}>
+          <View
+            style={[
+              styles.previewModalHeader,
+              {
+                paddingTop: Math.max(insets.top, 16),
+                paddingHorizontal: Math.max(insets.left, insets.right, 20),
+              },
+            ]}
+          >
             <View>
               <Text style={styles.previewModalTitle}>
                 Página {(previewPageIndex ?? 0) + 1} de {currentPages.length}
@@ -468,6 +505,20 @@ export default function DocumentDetailScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
+              {/* Botão de Excluir Página Ativa */}
+              <TouchableOpacity
+                style={styles.deletePreviewPageButton}
+                onPress={() => {
+                  if (activePreviewPage && previewPageIndex !== null) {
+                    handleDeletePage(activePreviewPage, previewPageIndex);
+                  }
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#FF6B6B" style={{ marginRight: 4 }} />
+                <Text style={styles.deletePreviewPageText}>Excluir</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.closePreviewButton}
                 onPress={() => setPreviewPageIndex(null)}
@@ -475,7 +526,7 @@ export default function DocumentDetailScreen() {
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
+          </View>
 
           {/* Barra Flutuante de Zoom para Inspecionar a Imagem */}
           {!showOcrText && (
@@ -663,13 +714,21 @@ export default function DocumentDetailScreen() {
         </View>
       </Modal>
 
-      {/* Modal de Confirmação de Exclusão (Projeto ou Página) */}
+      {/* Modal de Confirmação de Exclusão (Projeto, Página ou Seleção) */}
       <ConfirmModal
         visible={deleteConfirmTarget !== null}
-        title={deleteConfirmTarget?.type === 'document' ? 'Excluir Projeto' : 'Excluir Página'}
+        title={
+          deleteConfirmTarget?.type === 'document'
+            ? 'Excluir Projeto'
+            : deleteConfirmTarget?.type === 'batch'
+            ? 'Excluir Páginas Selecionadas'
+            : 'Excluir Página'
+        }
         message={
           deleteConfirmTarget?.type === 'document'
             ? `Deseja realmente excluir permanentemente "${deleteConfirmTarget?.title}" e todas as suas páginas?`
+            : deleteConfirmTarget?.type === 'batch'
+            ? `Deseja realmente excluir permanentemente as ${selectedPageIds.size} páginas selecionadas deste documento?`
             : `Deseja realmente excluir permanentemente a Página ${deleteConfirmTarget?.pageIndex}?`
         }
         confirmText="Excluir"
@@ -680,9 +739,22 @@ export default function DocumentDetailScreen() {
             setDeleteConfirmTarget(null);
             await deleteDocument(id);
             router.replace('/');
+          } else if (deleteConfirmTarget.type === 'batch') {
+            const pageIdsToDelete = Array.from(selectedPageIds);
+            setDeleteConfirmTarget(null);
+            setPreviewPageIndex(null);
+            setSelectedPageIds(new Set());
+            for (const pId of pageIdsToDelete) {
+              await deleteDocumentPage(id, pId);
+            }
+            if (currentPages.length <= pageIdsToDelete.length) {
+              await deleteDocument(id);
+              router.replace('/');
+            }
           } else if (deleteConfirmTarget.type === 'page' && deleteConfirmTarget.pageId) {
             const pageId = deleteConfirmTarget.pageId;
             setDeleteConfirmTarget(null);
+            setPreviewPageIndex(null);
             await deleteDocumentPage(id, pageId);
             if (currentPages.length <= 1) {
               await deleteDocument(id);
@@ -692,7 +764,7 @@ export default function DocumentDetailScreen() {
         }}
         onCancel={() => setDeleteConfirmTarget(null)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -929,6 +1001,35 @@ const styles = StyleSheet.create({
   },
   selectionDivider: {
     color: colors.separator,
+  },
+  deleteBatchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.small,
+  },
+  deleteBatchText: {
+    ...typography.caption,
+    color: '#DC2626',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  deletePreviewPageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.capsule,
+  },
+  deletePreviewPageText: {
+    ...typography.caption,
+    color: '#FF6B6B',
+    fontWeight: '700',
   },
   previewZoomBar: {
     flexDirection: 'row',

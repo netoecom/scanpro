@@ -11,6 +11,7 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
@@ -41,6 +42,9 @@ export function OnboardingInstallModal({
   } = usePwaInstall();
 
   const [showManualGuide, setShowManualGuide] = useState(false);
+
+  // No Android/iOS nativo, o app já está instalado — esconde seção PWA
+  const isNativeApp = Platform.OS !== 'web';
 
   const handleInstallPress = async () => {
     const success = await promptInstall();
@@ -84,43 +88,47 @@ export function OnboardingInstallModal({
               </View>
               <Text style={styles.title}>Bem-vindo ao ScanPro</Text>
               <Text style={styles.subtitle}>
-                Configure o aplicativo para máxima nitidez de câmera e funcionamento offline.
+                {isNativeApp
+                  ? 'Configure as permissões para a melhor experiência.'
+                  : 'Configure o aplicativo para máxima nitidez de câmera e funcionamento offline.'}
               </Text>
             </View>
 
             {/* Checklist de Permissões e Instalação */}
             <View style={styles.checklist}>
-              {/* Item 1: Instalação PWA */}
-              <View style={styles.checkItem}>
-                <View
-                  style={[
-                    styles.itemIconCircle,
-                    isInstalled ? styles.itemIconSuccess : styles.itemIconPending,
-                  ]}
-                >
-                  <Ionicons
-                    name={isInstalled ? 'checkmark-circle' : 'phone-portrait-outline'}
-                    size={20}
-                    color={isInstalled ? colors.success : colors.primary}
-                  />
+              {/* Item 1: Instalação PWA (apenas web) */}
+              {!isNativeApp && (
+                <View style={styles.checkItem}>
+                  <View
+                    style={[
+                      styles.itemIconCircle,
+                      isInstalled ? styles.itemIconSuccess : styles.itemIconPending,
+                    ]}
+                  >
+                    <Ionicons
+                      name={isInstalled ? 'checkmark-circle' : 'phone-portrait-outline'}
+                      size={20}
+                      color={isInstalled ? colors.success : colors.primary}
+                    />
+                  </View>
+                  <View style={styles.itemTextContainer}>
+                    <Text style={styles.itemTitle}>Instalar Aplicativo</Text>
+                    <Text style={styles.itemSubtitle}>
+                      {isInstalled
+                        ? 'ScanPro já instalado no dispositivo'
+                        : 'Abra em tela cheia com acesso instantâneo'}
+                    </Text>
+                  </View>
+                  {!isInstalled && (
+                    <TouchableOpacity style={styles.actionPill} onPress={handleInstallPress}>
+                      <Text style={styles.actionPillText}>Instalar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <View style={styles.itemTextContainer}>
-                  <Text style={styles.itemTitle}>Instalar Aplicativo</Text>
-                  <Text style={styles.itemSubtitle}>
-                    {isInstalled
-                      ? 'ScanPro já instalado no dispositivo'
-                      : 'Abra em tela cheia com acesso instantâneo'}
-                  </Text>
-                </View>
-                {!isInstalled && (
-                  <TouchableOpacity style={styles.actionPill} onPress={handleInstallPress}>
-                    <Text style={styles.actionPillText}>Instalar</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              )}
 
-              {/* Guia Manual de Instalação (se o prompt automático não disparou) */}
-              {(!isInstalled && (isIOS || showManualGuide)) && (
+              {/* Guia Manual de Instalação (apenas web, se o prompt automático não disparou) */}
+              {!isNativeApp && !isInstalled && (isIOS || showManualGuide) && (
                 <View style={styles.guideBox}>
                   <Ionicons name="information-circle" size={20} color={colors.primary} />
                   <View style={{ flex: 1 }}>
@@ -211,7 +219,7 @@ export function OnboardingInstallModal({
             {/* Ações Inferiores */}
             <View style={styles.footerActions}>
               <AppButton
-                title="Configurar Tudo com 1 Clique"
+                title={isNativeApp ? 'Configurar e Começar' : 'Configurar Tudo com 1 Clique'}
                 variant="primary"
                 onPress={handleMasterAction}
                 icon={<Ionicons name="sparkles" size={18} color="#FFFFFF" />}

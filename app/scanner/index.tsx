@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Modal,
   Image,
@@ -14,8 +13,10 @@ import {
   Alert,
   TextInput,
   PanResponder,
+  Animated,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
@@ -33,9 +34,18 @@ export default function ScannerScreen() {
   const targetDoc = documentId ? documents.find((d) => d.id === documentId) : null;
   const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const previewImageHeight = Math.max(300, windowHeight - 210);
 
   const [isCropModalVisible, setIsCropModalVisible] = useState(false);
+  // Zoom/Pan usa Animated.Value para performance 60fps (sem re-render a cada frame)
+  const zoomAnimVal = useRef(new Animated.Value(1)).current;
+  const panXAnimVal = useRef(new Animated.Value(0)).current;
+  const panYAnimVal = useRef(new Animated.Value(0)).current;
+  const zoomScaleRef = useRef<number>(1);
+  const panPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Estado para UI que precisa de re-render (ex: botões de zoom)
   const [zoomScale, setZoomScale] = useState<number>(1);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -84,30 +94,14 @@ export default function ScannerScreen() {
     handleMountError,
     retakeCurrentPage,
     resetScanner,
+    isReviewing,
+    processingMessage,
     // Novos controles de modo
     cameraMode,
     enableEmbeddedCamera,
     switchToNativeCamera,
     hasAutoLaunchedRef,
   } = useScannerEngine();
-
-  // Auto-launch da câmera nativa ao abrir a tela do scanner (apenas uma vez por sessão)
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    if (hasAutoLaunchedRef.current) return;
-    if (status !== 'SCANNER_SEARCHING') return;
-    if (processedResult !== null) return;
-    if (capturedPages.length > 0) return;
-
-    hasAutoLaunchedRef.current = true;
-
-    // Pequeno delay para garantir que a tela está montada no Android
-    const timer = setTimeout(() => {
-      launchNativeCamera();
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [status, processedResult, capturedPages.length, launchNativeCamera, hasAutoLaunchedRef]);
 
   // Valida o limite do plano gratuito antes de disparar a captura
   const handleCapturePress = async () => {
@@ -130,7 +124,29 @@ export default function ScannerScreen() {
     await captureDocument();
   };
 
-  // Controle de Gesto de Pinça (Pinch to Zoom) e Pan tátil
+  // Helper: atualiza zoom tanto na Animated.Value (60fps) quanto no estado React (UI botões)
+  const updateZoom = useCallback((newScale: number) => {
+    zoomScaleRef.current = newScale;
+    zoomAnimVal.setValue(newScale);
+    setZoomScale(newScale);
+    if (newScale === 1) {
+      panPositionRef.current = { x: 0, y: 0 };
+      panXAnimVal.setValue(0);
+      panYAnimVal.setValue(0);
+      setPanPosition({ x: 0, y: 0 });
+    }
+  }, [zoomAnimVal, panXAnimVal, panYAnimVal]);
+
+  const updatePan = useCallback((x: number, y: number) => {
+    const clampedX = Math.max(-180, Math.min(180, x));
+    const clampedY = Math.max(-240, Math.min(240, y));
+    panPositionRef.current = { x: clampedX, y: clampedY };
+    panXAnimVal.setValue(clampedX);
+    panYAnimVal.setValue(clampedY);
+    // NÃO chamamos setPanPosition aqui para evitar re-render a cada frame
+  }, [panXAnimVal, panYAnimVal]);
+
+  // Controle de Gesto de Pinça (Pinch to Zoom) e Pan tátil — performance 60fps
   const pinchPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -141,11 +157,8 @@ export default function ScannerScreen() {
         if (touches.length <= 1) {
           if (now - lastTapRef.current < 320) {
             // Double tap para alternar zoom 1x <-> 2.5x
-            setZoomScale((z) => {
-              const next = z === 1 ? 2.5 : 1;
-              if (next === 1) setPanPosition({ x: 0, y: 0 });
-              return next;
-            });
+            const next = zoomScaleRef.current === 1 ? 2.5 : 1;
+            updateZoom(next);
           }
           lastTapRef.current = now;
         } else if (touches.length >= 2) {
@@ -154,7 +167,7 @@ export default function ScannerScreen() {
             touches[0].pageY - touches[1].pageY
           );
           initialPinchDistRef.current = dist > 0 ? dist : null;
-          initialPinchScaleRef.current = zoomScale;
+          initialPinchScaleRef.current = zoomScaleRef.current;
         }
       },
       onPanResponderMove: (evt, gestureState) => {
@@ -166,7 +179,7 @@ export default function ScannerScreen() {
           );
           if (!initialPinchDistRef.current || initialPinchDistRef.current === 0) {
             initialPinchDistRef.current = dist;
-            initialPinchScaleRef.current = zoomScale;
+            initialPinchScaleRef.current = zoomScaleRef.current;
             return;
           }
           const ratio = dist / initialPinchDistRef.current;
@@ -174,20 +187,32 @@ export default function ScannerScreen() {
             1,
             Math.min(4, parseFloat((initialPinchScaleRef.current * ratio).toFixed(2)))
           );
-          setZoomScale(newScale);
-          if (newScale === 1) setPanPosition({ x: 0, y: 0 });
-        } else if (touches.length <= 1 && zoomScale > 1) {
-          setPanPosition((prev) => ({
-            x: Math.max(-180, Math.min(180, prev.x + gestureState.dx * 0.45)),
-            y: Math.max(-240, Math.min(240, prev.y + gestureState.dy * 0.45)),
-          }));
+          // Atualiza Animated.Value diretamente — sem re-render React
+          zoomScaleRef.current = newScale;
+          zoomAnimVal.setValue(newScale);
+          if (newScale === 1) {
+            panPositionRef.current = { x: 0, y: 0 };
+            panXAnimVal.setValue(0);
+            panYAnimVal.setValue(0);
+          }
+        } else if (touches.length <= 1 && zoomScaleRef.current > 1) {
+          // Pan suave — atualiza Animated.Value diretamente
+          updatePan(
+            panPositionRef.current.x + gestureState.dx * 0.45,
+            panPositionRef.current.y + gestureState.dy * 0.45
+          );
         }
       },
       onPanResponderRelease: () => {
         initialPinchDistRef.current = null;
+        // Sincroniza estado React para UI (botões de zoom) no final do gesto
+        setZoomScale(zoomScaleRef.current);
+        setPanPosition({ ...panPositionRef.current });
       },
       onPanResponderTerminate: () => {
         initialPinchDistRef.current = null;
+        setZoomScale(zoomScaleRef.current);
+        setPanPosition({ ...panPositionRef.current });
       },
     })
   ).current;
@@ -362,8 +387,17 @@ export default function ScannerScreen() {
         )}
       </View>
 
-      {/* Botão de Voltar */}
-      <SafeAreaView style={styles.nativeModeBackSafe} pointerEvents="box-none">
+      {/* Botão de Voltar com Margem Segura */}
+      <View
+        style={[
+          styles.nativeModeBackSafe,
+          {
+            paddingTop: Math.max(insets.top, 18),
+            paddingHorizontal: Math.max(insets.left, insets.right, 20),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <TouchableOpacity
           style={styles.nativeModeBackButton}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
@@ -371,7 +405,7 @@ export default function ScannerScreen() {
         >
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     </View>
   );
 
@@ -405,7 +439,7 @@ export default function ScannerScreen() {
             facing={facing}
             mode="picture"
             mute={true}
-            ratio="4:3"
+            zoom={0}
             autofocus="on"
             animateShutter={false}
             enableTorch={flash === 'on'}
@@ -426,9 +460,17 @@ export default function ScannerScreen() {
         capturedImageUri={rawCapturedUri}
       />
 
-      <SafeAreaView style={styles.controlsSafeArea} pointerEvents="box-none">
-        {/* Barra Superior de Controles */}
-        <View style={styles.topControls}>
+      <View style={styles.controlsSafeArea} pointerEvents="box-none">
+        {/* Barra Superior de Controles com Margem Segura */}
+        <View
+          style={[
+            styles.topControls,
+            {
+              paddingTop: Math.max(insets.top, 18),
+              paddingHorizontal: Math.max(insets.left, insets.right, 20),
+            },
+          ]}
+        >
           <TouchableOpacity
             style={styles.circleButton}
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
@@ -513,8 +555,16 @@ export default function ScannerScreen() {
           </View>
         )}
 
-        {/* Barra Inferior de Disparo */}
-        <View style={styles.bottomControls}>
+        {/* Barra Inferior de Disparo com Margem Segura */}
+        <View
+          style={[
+            styles.bottomControls,
+            {
+              paddingBottom: Math.max(insets.bottom, 24),
+              paddingHorizontal: Math.max(insets.left, insets.right, 24),
+            },
+          ]}
+        >
           {/* Atalho para importar da galeria */}
           <TouchableOpacity
             style={styles.secondaryActionButton}
@@ -543,7 +593,7 @@ export default function ScannerScreen() {
             </Text>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 
@@ -551,14 +601,19 @@ export default function ScannerScreen() {
   // RENDER PRINCIPAL — Escolhe entre modo nativo e embutido
   // =====================================================================
 
-  // Se estiver no estado de "captura bem sucedida" com preview, mostramos o modal de preview
-  // independente do modo de câmera
-  const isInPreviewMode = status === 'CAPTURE_SUCCESS' && processedResult !== null;
+  // Se estiver no estado de revisão/preview, mantemos o modal aberto e a câmera pausada
+  const isInPreviewMode = (isReviewing || status === 'CAPTURE_SUCCESS') && processedResult !== null;
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Tela base: modo nativo (padrão) ou embutido (avançado) */}
-      {cameraMode === 'embedded' ? renderEmbeddedModeScreen() : renderNativeModeScreen()}
+      {/* Tela base: quando em preview, a câmera de fundo fica inativa para poupar bateria e evitar ativações indevidas */}
+      {isInPreviewMode ? (
+        <View style={{ flex: 1, backgroundColor: '#090D16' }} />
+      ) : cameraMode === 'embedded' ? (
+        renderEmbeddedModeScreen()
+      ) : (
+        renderNativeModeScreen()
+      )}
 
       {/* Modal / Tela Cheia de Prévia pós-captura com visualização expandida e seleção de filtros */}
       <Modal
@@ -567,7 +622,16 @@ export default function ScannerScreen() {
         transparent={false}
         onRequestClose={retakeCurrentPage}
       >
-        <SafeAreaView style={styles.fullPreviewContainer}>
+        <View
+          style={[
+            styles.fullPreviewContainer,
+            {
+              paddingTop: Math.max(insets.top, 14),
+              paddingBottom: Math.max(insets.bottom, 20),
+              paddingHorizontal: Math.max(insets.left, insets.right, 16),
+            },
+          ]}
+        >
           {/* Header Superior da Prévia em Tela Cheia */}
           <View style={styles.fullPreviewHeader}>
             <TouchableOpacity
@@ -622,7 +686,7 @@ export default function ScannerScreen() {
             <View style={styles.zoomControlBar}>
               <TouchableOpacity
                 style={styles.zoomBtn}
-                onPress={() => setZoomScale((z) => Math.max(1, parseFloat((z - 0.5).toFixed(1))))}
+                onPress={() => updateZoom(Math.max(1, parseFloat((zoomScale - 0.5).toFixed(1))))}
                 disabled={zoomScale <= 1}
               >
                 <Ionicons name="remove" size={16} color={zoomScale <= 1 ? '#64748B' : '#FFFFFF'} />
@@ -630,14 +694,14 @@ export default function ScannerScreen() {
 
               <TouchableOpacity
                 style={styles.zoomLevelBadge}
-                onPress={() => setZoomScale((z) => (z === 1 ? 2 : 1))}
+                onPress={() => updateZoom(zoomScale === 1 ? 2 : 1)}
               >
                 <Text style={styles.zoomLevelText}>{Math.round(zoomScale * 100)}%</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.zoomBtn}
-                onPress={() => setZoomScale((z) => Math.min(3, parseFloat((z + 0.5).toFixed(1))))}
+                onPress={() => updateZoom(Math.min(3, parseFloat((zoomScale + 0.5).toFixed(1))))}
                 disabled={zoomScale >= 3}
               >
                 <Ionicons name="add" size={16} color={zoomScale >= 3 ? '#64748B' : '#FFFFFF'} />
@@ -646,7 +710,7 @@ export default function ScannerScreen() {
               {zoomScale > 1 && (
                 <TouchableOpacity
                   style={styles.zoomResetBtn}
-                  onPress={() => setZoomScale(1)}
+                  onPress={() => updateZoom(1)}
                 >
                   <Text style={styles.zoomResetText}>1x</Text>
                 </TouchableOpacity>
@@ -661,11 +725,8 @@ export default function ScannerScreen() {
                     if (e.ctrlKey) {
                       e.preventDefault();
                       const delta = e.deltaY > 0 ? -0.15 : 0.15;
-                      setZoomScale((z) => {
-                        const next = Math.max(1, Math.min(4, parseFloat((z + delta).toFixed(2))));
-                        if (next === 1) setPanPosition({ x: 0, y: 0 });
-                        return next;
-                      });
+                      const next = Math.max(1, Math.min(4, parseFloat((zoomScaleRef.current + delta).toFixed(2))));
+                      updateZoom(next);
                     }
                   },
                 } as any)}
@@ -679,15 +740,16 @@ export default function ScannerScreen() {
                   cursor: zoomScale > 1 ? 'grab' : 'default',
                 } as any}
               >
-                <Image
+                <Animated.Image
+                  key={processedResult.processedUri}
                   source={{ uri: processedResult.processedUri }}
                   style={[
                     styles.fullPreviewImage,
                     {
                       transform: [
-                        { scale: zoomScale },
-                        { translateX: panPosition.x },
-                        { translateY: panPosition.y },
+                        { scale: zoomAnimVal },
+                        { translateX: panXAnimVal },
+                        { translateY: panYAnimVal },
                       ],
                     },
                   ]}
@@ -698,6 +760,16 @@ export default function ScannerScreen() {
               <View style={styles.placeholderPreview}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.previewDocName}>Otimizando nitidez do documento...</Text>
+              </View>
+            )}
+
+            {/* Overlay contextual de carregamento de filtro ou recorte */}
+            {processingMessage && (
+              <View style={styles.previewProcessingOverlay} pointerEvents="none">
+                <View style={styles.previewProcessingCard}>
+                  <ActivityIndicator size="small" color="#00E5FF" style={{ marginRight: 10 }} />
+                  <Text style={styles.previewProcessingText}>{processingMessage}</Text>
+                </View>
               </View>
             )}
           </View>
@@ -879,7 +951,7 @@ export default function ScannerScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* Modal Interativo de Recorte e Ajuste Fino dos Cantos */}
@@ -1487,6 +1559,34 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     marginTop: spacing.small,
+  },
+  previewProcessingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(9, 13, 22, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 40,
+  },
+  previewProcessingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: radii.capsule,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  previewProcessingText: {
+    ...typography.subheadline,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
   fullPreviewBottomBar: {
     backgroundColor: '#0F172A',
