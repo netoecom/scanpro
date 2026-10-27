@@ -1,14 +1,11 @@
-/**
- * ScanPro — Sync Engine & Outbox Worker
- * Conforme especificado em TECH_ARCHITECTURE.md (Seção 11 - Offline Sync)
- * local change -> outbox -> sync worker -> remote -> ack -> mark synced
- */
+import { DropboxService } from '../dropbox';
+import { PdfService } from '../pdf';
 
 export interface SyncQueueItem {
   id: string;
-  entityType: 'document' | 'page' | 'folder';
+  entityType: 'document' | 'page' | 'folder' | 'dropbox_upload';
   entityId: string;
-  action: 'create' | 'update' | 'delete';
+  action: 'create' | 'update' | 'delete' | 'upload';
   payload?: any;
   createdAt: string;
   attempts: number;
@@ -31,9 +28,9 @@ export class SyncService {
    * Enfileira alteração local para sincronização futura na nuvem
    */
   static enqueueChange(
-    entityType: 'document' | 'page' | 'folder',
+    entityType: 'document' | 'page' | 'folder' | 'dropbox_upload',
     entityId: string,
-    action: 'create' | 'update' | 'delete',
+    action: 'create' | 'update' | 'delete' | 'upload',
     payload?: any
   ): void {
     this.outboxQueue.push({
@@ -45,6 +42,57 @@ export class SyncService {
       createdAt: new Date().toISOString(),
       attempts: 0,
     });
+  }
+
+  /**
+   * Enfileira upload de documento PDF para o Dropbox
+   */
+  static enqueueDropboxUpload(
+    documentId: string,
+    title: string,
+    pdfUri: string
+  ): void {
+    this.enqueueChange('dropbox_upload', documentId, 'upload', {
+      title,
+      pdfUri,
+    });
+  }
+
+  /**
+   * Executa o upload para o Dropbox em background imediatamente ou enfileira se falhar
+   */
+  static async syncDropboxDocumentInBackground(
+    documentId: string,
+    title: string,
+    pages: Array<{ uri: string; width?: number; height?: number }>
+  ): Promise<void> {
+    const dropboxState = DropboxService.getState();
+    if (!dropboxState.isConnected || !dropboxState.autoUploadEnabled) {
+      return;
+    }
+
+    try {
+      // Gera o PDF consolidado
+      const generated = await PdfService.generatePdf({
+        title,
+        pages,
+      });
+
+      // Tenta o envio imediato via API v2
+      await DropboxService.uploadPdf(generated.uri, title);
+    } catch (err) {
+      console.warn('Upload imediato do Dropbox falhou. Enfileirando no outbox:', err);
+      // Se falhar (ex: offline), enfileira para a próxima tentativa de sync
+      try {
+        const generated = await PdfService.generatePdf({
+          title,
+          pages,
+        });
+        this.enqueueDropboxUpload(documentId, title, generated.uri);
+      } catch (genErr) {
+        console.warn('Erro ao enfileirar PDF para Dropbox:', genErr);
+      }
+    }
   }
 
   /**
@@ -71,22 +119,42 @@ export class SyncService {
     }
 
     this.isSyncing = true;
+    let processedCount = 0;
 
     try {
-      // Simulação do processamento assíncrono do outbox com latência resiliente
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // Processa itens do Dropbox na fila caso esteja conectado
+      const remainingQueue: SyncQueueItem[] = [];
 
-      const count = this.outboxQueue.length;
-      // Drena os itens sincronizados
-      this.outboxQueue = [];
+      for (const item of this.outboxQueue) {
+        if (item.entityType === 'dropbox_upload' && item.payload?.pdfUri) {
+          const dropboxState = DropboxService.getState();
+          if (dropboxState.isConnected) {
+            try {
+              await DropboxService.uploadPdf(item.payload.pdfUri, item.payload.title || 'Documento');
+              processedCount++;
+            } catch (uploadErr) {
+              item.attempts++;
+              remainingQueue.push(item);
+            }
+          } else {
+            remainingQueue.push(item);
+          }
+        } else {
+          // Itens gerais de sync de entidades
+          processedCount++;
+        }
+      }
+
+      this.outboxQueue = remainingQueue;
       this.lastSyncTime = new Date().toISOString();
 
-      return { processed: count, success: true };
+      return { processed: processedCount, success: true };
     } catch (err) {
       console.warn('Falha na sincronização em nuvem:', err);
-      return { processed: 0, success: false };
+      return { processed: processedCount, success: false };
     } finally {
       this.isSyncing = false;
     }
   }
 }
+

@@ -17,10 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, touchTarget, shadows } from '../../theme';
-import { AppButton, PageThumbnail, ConfirmModal } from '../../components/ui';
-import { useDocumentStore } from '../../store';
+import { AppButton, PageThumbnail, ConfirmModal, PaywallModal } from '../../components/ui';
+import { useDocumentStore, usePremiumStore } from '../../store';
 import { DocumentPage } from '../../types';
 import { PdfService } from '../../services/pdf/pdfService';
+import { DropboxService } from '../../services/dropbox';
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
@@ -118,8 +119,10 @@ export default function DocumentDetailScreen() {
     })
   ).current;
 
+  const { isPro, isPaywallVisible, openPaywall, closePaywall } = usePremiumStore();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSharingImages, setIsSharingImages] = useState(false);
+  const [isSavingToDropbox, setIsSavingToDropbox] = useState(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
@@ -291,6 +294,68 @@ export default function DocumentDetailScreen() {
       Alert.alert('Erro', 'Não foi possível compartilhar as imagens.');
     } finally {
       setIsSharingImages(false);
+    }
+  };
+
+  const handleSaveToDropbox = async () => {
+    setIsShareModalVisible(false);
+
+    if (!isPro) {
+      openPaywall();
+      return;
+    }
+
+    const dropboxState = DropboxService.getState();
+    if (!dropboxState.isConnected) {
+      Alert.alert(
+        'Dropbox Não Conectado',
+        'Conecte sua conta do Dropbox na tela de Ajustes para salvar seus documentos automaticamente na nuvem.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Ir para Ajustes',
+            onPress: () => router.push('/profile' as any),
+          },
+        ]
+      );
+      return;
+    }
+
+    const pagesToExport = currentPages
+      .filter((p) => selectedPageIds.has(p.id))
+      .map((p) => ({
+        uri: p.processedPath || p.originalPath,
+        width: p.width,
+        height: p.height,
+      }));
+
+    if (pagesToExport.length === 0) return;
+
+    try {
+      setIsSavingToDropbox(true);
+      const result = await PdfService.generatePdf({
+        title: document.title,
+        pages: pagesToExport,
+      });
+
+      if (id) {
+        await updateDocumentPdf(id, result.uri);
+      }
+
+      const uploadResult = await DropboxService.uploadPdf(result.uri, document.title);
+
+      Alert.alert(
+        'Salvo no Dropbox! 🎉',
+        `O arquivo "${uploadResult.name}" foi salvo com sucesso em ${uploadResult.pathDisplay}.`
+      );
+    } catch (err) {
+      console.error('Erro ao salvar no Dropbox:', err);
+      Alert.alert(
+        'Erro no Envio',
+        err instanceof Error ? err.message : 'Não foi possível salvar no Dropbox. Verifique sua conexão.'
+      );
+    } finally {
+      setIsSavingToDropbox(false);
     }
   };
 
@@ -668,6 +733,29 @@ export default function DocumentDetailScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 
+            {/* Opção 3: Salvar no Dropbox (PRO) */}
+            <TouchableOpacity
+              style={styles.shareOptionCard}
+              onPress={handleSaveToDropbox}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.shareOptionIconWrap, { backgroundColor: 'rgba(0, 97, 254, 0.12)' }]}>
+                <Ionicons name="logo-dropbox" size={26} color="#0061FE" />
+              </View>
+              <View style={styles.shareOptionMeta}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.shareOptionTitle}>Salvar no Dropbox</Text>
+                  <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#B45309' }}>PRO</Text>
+                  </View>
+                </View>
+                <Text style={styles.shareOptionDesc}>
+                  Enviar PDF consolidado para a pasta /ScanPro no seu Dropbox
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+
             <AppButton
               title="Cancelar"
               variant="tertiary"
@@ -763,6 +851,22 @@ export default function DocumentDetailScreen() {
           }
         }}
         onCancel={() => setDeleteConfirmTarget(null)}
+      />
+
+      {/* Loading Overlay ao Salvar no Dropbox */}
+      {isSavingToDropbox && (
+        <View style={styles.savingOverlay}>
+          <View style={[styles.savingDialog, shadows.card]}>
+            <ActivityIndicator size="large" color="#0061FE" />
+            <Text style={styles.savingText}>Salvando no Dropbox...</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Paywall para recurso PRO */}
+      <PaywallModal
+        visible={isPaywallVisible}
+        onClose={closePaywall}
       />
     </View>
   );
@@ -1122,5 +1226,28 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  savingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+  },
+  savingDialog: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.default * 1.5,
+    paddingVertical: spacing.default * 1.2,
+    borderRadius: radii.prominentCards,
+    alignItems: 'center',
+    gap: spacing.small,
+  },
+  savingText: {
+    ...typography.headline,
+    color: colors.textPrimary,
   },
 });

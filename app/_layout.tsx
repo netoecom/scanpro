@@ -1,9 +1,15 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
+import { DropboxService } from '../services/dropbox';
 
 export default function RootLayout() {
+  useEffect(() => {
+    DropboxService.init();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -25,3 +31,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+

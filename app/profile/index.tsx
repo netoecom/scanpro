@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { AuthService } from '../../services/auth';
 import { SyncService, SyncOverview } from '../../services/sync';
 import { BackupService } from '../../services/backup';
 import { TelemetryService } from '../../services/telemetry';
+import { DropboxService, DropboxAuthState } from '../../services/dropbox';
+import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
@@ -45,7 +47,15 @@ export default function ProfileScreen() {
   const [isRestoreModalVisible, setIsRestoreModalVisible] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [backupJsonInput, setBackupJsonInput] = useState('');
+  const [dropboxState, setDropboxState] = useState<DropboxAuthState>(DropboxService.getState());
+  const [isDropboxModalVisible, setIsDropboxModalVisible] = useState(false);
+  const [dropboxTokenInput, setDropboxTokenInput] = useState('');
+  const [isConnectingDropbox, setIsConnectingDropbox] = useState(false);
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
+
+  useEffect(() => {
+    return DropboxService.subscribe(setDropboxState);
+  }, []);
 
   const totalPages = documents.reduce((acc, doc) => acc + doc.pageCount, 0);
 
@@ -155,6 +165,71 @@ export default function ProfileScreen() {
             TelemetryService.clearAll();
             setFunnelSummary(TelemetryService.getFunnelSummary());
             Alert.alert('Sucesso', 'Telemetria local reiniciada.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConnectDropbox = () => {
+    if (!isPro) {
+      openPaywall();
+      return;
+    }
+    setIsDropboxModalVisible(true);
+  };
+
+  const handleStartPkceAuth = async () => {
+    try {
+      const { url } = await DropboxService.getAuthorizationUrl();
+      await Linking.openURL(url);
+    } catch (err) {
+      Alert.alert(
+        'Aviso',
+        'Não foi possível abrir o navegador diretamente. Você pode utilizar o token de acesso pessoal gerado no App Console do Dropbox.'
+      );
+    }
+  };
+
+  const handleConfirmDropboxToken = async () => {
+    if (!dropboxTokenInput.trim()) {
+      Alert.alert('Aviso', 'Por favor, insira o token de acesso ou código de autorização.');
+      return;
+    }
+
+    try {
+      setIsConnectingDropbox(true);
+      await DropboxService.connectWithAccessToken(dropboxTokenInput.trim());
+      setIsDropboxModalVisible(false);
+      setDropboxTokenInput('');
+      Alert.alert('Dropbox Conectado!', 'Sua conta foi integrada com sucesso. Novos scans poderão ser salvos automaticamente.');
+    } catch (err) {
+      Alert.alert('Falha na Conexão', err instanceof Error ? err.message : 'Verifique os dados informados.');
+    } finally {
+      setIsConnectingDropbox(false);
+    }
+  };
+
+  const handleToggleDropboxAutoUpload = async () => {
+    if (!isPro) {
+      openPaywall();
+      return;
+    }
+    await DropboxService.setAutoUpload(!dropboxState.autoUploadEnabled);
+  };
+
+  const handleDisconnectDropbox = () => {
+    Alert.alert(
+      'Desconectar Dropbox',
+      'Deseja desconectar sua conta do Dropbox? O aplicativo continuará funcionando normalmente em modo local.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Desconectar',
+          style: 'destructive',
+          onPress: async () => {
+            await DropboxService.disconnect();
+            Alert.alert('Desconectado', 'Sua conta do Dropbox foi desconectada.');
           },
         },
       ]
@@ -317,6 +392,86 @@ export default function ProfileScreen() {
               style={{ marginTop: spacing.small }}
               icon={<Ionicons name="sync" size={16} color={colors.primary} />}
             />
+          </View>
+        </View>
+
+        {/* Seção de Integração com o Dropbox (PRO) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeader}>Nuvem & Integrações</Text>
+            <View style={styles.proSmallBadge}>
+              <Ionicons name="sparkles" size={10} color="#B45309" />
+              <Text style={styles.proSmallBadgeText}>PRO</Text>
+            </View>
+          </View>
+
+          <View style={[styles.menuCard, shadows.card]}>
+            <View style={styles.dropboxHeaderRow}>
+              <View style={styles.dropboxIconCircle}>
+                <Ionicons name="logo-dropbox" size={24} color="#0061FE" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.dropboxTitleRow}>
+                  <Text style={styles.menuItemTitle}>
+                    {dropboxState.isConnected ? dropboxState.account?.displayName || 'Dropbox Conectado' : 'Dropbox'}
+                  </Text>
+                  {dropboxState.isConnected ? (
+                    <View style={styles.dropboxActivePill}>
+                      <Text style={styles.dropboxActivePillText}>CONECTADO</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.dropboxInactivePill}>
+                      <Text style={styles.dropboxInactivePillText}>NÃO CONECTADO</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.menuItemSubtitle}>
+                  {dropboxState.isConnected
+                    ? `${dropboxState.account?.email || ''} • Pasta: ${dropboxState.targetFolder}`
+                    : 'Salve e sincronize automaticamente seus PDFs na sua pasta do Dropbox.'}
+                </Text>
+              </View>
+            </View>
+
+            {dropboxState.isConnected ? (
+              <View style={styles.dropboxConnectedControls}>
+                {/* Toggle de Auto-Upload */}
+                <TouchableOpacity
+                  style={styles.dropboxToggleRow}
+                  onPress={handleToggleDropboxAutoUpload}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.dropboxToggleLabel}>Salvar novos scans automaticamente</Text>
+                    <Text style={styles.dropboxToggleSub}>Envia para o Dropbox em segundo plano sem travar o app</Text>
+                  </View>
+                  <View style={[styles.togglePill, dropboxState.autoUploadEnabled ? styles.togglePillActive : styles.togglePillInactive]}>
+                    <Text style={[styles.togglePillText, dropboxState.autoUploadEnabled ? styles.togglePillTextActive : styles.togglePillTextInactive]}>
+                      {dropboxState.autoUploadEnabled ? 'LIGADO' : 'DESLIGADO'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.dropboxActionsRow}>
+                  <AppButton
+                    title="Desconectar Conta"
+                    variant="tertiary"
+                    onPress={handleDisconnectDropbox}
+                    style={{ flex: 1 }}
+                    icon={<Ionicons name="log-out-outline" size={16} color={colors.textSecondary} />}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={{ marginTop: spacing.small }}>
+                <AppButton
+                  title={isPro ? 'Conectar ao Dropbox' : 'Conectar ao Dropbox (Recurso Pro 💎)'}
+                  variant={isPro ? 'primary' : 'secondary'}
+                  onPress={handleConnectDropbox}
+                  icon={<Ionicons name="logo-dropbox" size={16} color={isPro ? '#FFFFFF' : '#0061FE'} />}
+                />
+              </View>
+            )}
           </View>
         </View>
 
@@ -522,6 +677,67 @@ export default function ProfileScreen() {
                 title="Restaurar"
                 variant="primary"
                 onPress={handleRestoreBackup}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Conexão com o Dropbox */}
+      <Modal
+        visible={isDropboxModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDropboxModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialog}>
+            <View style={styles.dialogHeader}>
+              <Ionicons name="logo-dropbox" size={26} color="#0061FE" />
+              <Text style={styles.dialogTitle}>Conectar ao Dropbox</Text>
+            </View>
+            <Text style={styles.dialogSubtitle}>
+              Ao conectar sua conta, seus scans poderão ser sincronizados automaticamente para a pasta /ScanPro no seu Dropbox.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.oauthButton}
+              onPress={handleStartPkceAuth}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="open-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.oauthButtonText}>Autorizar pelo Navegador (OAuth 2.0)</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dialogDividerRow}>
+              <View style={styles.dialogDividerLine} />
+              <Text style={styles.dialogDividerText}>OU TOKEN DE TESTE</Text>
+              <View style={styles.dialogDividerLine} />
+            </View>
+
+            <TextInput
+              style={styles.dialogInput}
+              value={dropboxTokenInput}
+              onChangeText={setDropboxTokenInput}
+              placeholder="Cole o Access Token ou código aqui..."
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.dialogActions}>
+              <AppButton
+                title="Cancelar"
+                variant="tertiary"
+                onPress={() => setIsDropboxModalVisible(false)}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                title="Conectar"
+                variant="primary"
+                onPress={handleConfirmDropboxToken}
+                loading={isConnectingDropbox}
+                disabled={isConnectingDropbox}
                 style={{ flex: 1 }}
               />
             </View>
@@ -908,5 +1124,153 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.micro,
+  },
+  proSmallBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.standard,
+    gap: 4,
+  },
+  proSmallBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  dropboxHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.small,
+  },
+  dropboxIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E0EEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.compact,
+  },
+  dropboxTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  dropboxActivePill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.standard,
+  },
+  dropboxActivePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  dropboxInactivePill: {
+    backgroundColor: colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  dropboxInactivePillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  dropboxConnectedControls: {
+    marginTop: spacing.small,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+    paddingTop: spacing.small,
+  },
+  dropboxToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.small,
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    paddingHorizontal: spacing.compact,
+    marginBottom: spacing.small,
+  },
+  dropboxToggleLabel: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  dropboxToggleSub: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  togglePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.capsule,
+  },
+  togglePillActive: {
+    backgroundColor: colors.primary,
+  },
+  togglePillInactive: {
+    backgroundColor: colors.separator,
+  },
+  togglePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  togglePillTextActive: {
+    color: '#FFFFFF',
+  },
+  togglePillTextInactive: {
+    color: colors.textSecondary,
+  },
+  dropboxActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.small,
+  },
+  oauthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0061FE',
+    borderRadius: radii.standard,
+    paddingVertical: spacing.small + 2,
+    gap: spacing.compact,
+    marginBottom: spacing.small,
+  },
+  oauthButtonText: {
+    ...typography.headline,
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  dialogDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.small,
+    gap: spacing.compact,
+  },
+  dialogDividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+  },
+  dialogDividerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
 });

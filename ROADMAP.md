@@ -108,7 +108,8 @@ DoD:
 - sync;
 - backup;
 - restore;
-- RLS.
+- RLS;
+- [x] Dropbox Cloud Integration (OAuth 2.0 PKCE, API v2 files/upload, background outbox sync).
 
 ## Fase 9 — Premium (Concluída ✅)
 
@@ -118,6 +119,7 @@ DoD:
 - [x] Modal de Paywall de alta conversão (`components/ui/PaywallModal.tsx`);
 - [x] Pacotes Anual (R$ 99,90/ano, 44% OFF, 3 dias grátis) e Mensal (R$ 14,90/mês);
 - [x] Limite de 5 documentos para usuários Free com gatilhos amigáveis;
+- [x] Dropbox Cloud Sync como benefício de conversão PRO;
 - [x] Restaurar compras e cancelamento de assinatura integrados;
 - [x] Badges Pro e pontos de entrada na Home (`app/index.tsx`), Scanner (`app/scanner/index.tsx`) e Ajustes (`app/profile/index.tsx`).
 

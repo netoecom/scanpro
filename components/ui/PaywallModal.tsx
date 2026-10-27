@@ -110,6 +110,11 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
       title: 'Sincronização Cloud Multi-Dispositivo',
       desc: 'Acesse e organize sua biblioteca inteira tanto no celular quanto no navegador.',
     },
+    {
+      icon: 'logo-dropbox',
+      title: 'Backup Automático no Dropbox',
+      desc: 'Envie seus PDFs direto para sua pasta no Dropbox sem precisar exportar manualmente.',
+    },
   ];
 
   return (

@@ -25,6 +25,7 @@ import { CaptureButton, ScannerOverlay, WebCameraView, CropEditorModal, CameraEr
 import { useScannerEngine } from '../../features/scanner';
 import { useDocumentStore, usePremiumStore } from '../../store';
 import { TelemetryService } from '../../services/telemetry';
+import { SyncService } from '../../services/sync';
 import { ScanFilterMode } from '../../types';
 
 export default function ScannerScreen() {
@@ -291,6 +292,19 @@ export default function ScannerScreen() {
         ocrText: page.ocrText,
       }))
     );
+
+    // Se o usuário for Pro, dispara o auto-upload em segundo plano para o Dropbox (se configurado)
+    if (isPro) {
+      SyncService.syncDropboxDocumentInBackground(
+        newDoc.id,
+        finalTitle,
+        allPages.map((p) => ({
+          uri: p.processedUri || p.originalUri,
+          width: p.width,
+          height: p.height,
+        }))
+      );
+    }
 
     // Redireciona diretamente para a pasta do documento com as páginas
     router.replace(`/document/${newDoc.id}` as any);
