@@ -17,6 +17,7 @@ interface PremiumState {
   openPaywall: () => void;
   closePaywall: () => void;
   purchasePackage: (packageId: string) => Promise<boolean>;
+  redeemCoupon: (code: string) => Promise<{ success: boolean; message: string }>;
   restorePurchases: () => Promise<boolean>;
   cancelSubscription: () => Promise<void>;
 }
@@ -58,6 +59,33 @@ export const usePremiumStore = create<PremiumState>((set, get) => ({
     } catch {
       set({ isLoading: false });
       return false;
+    }
+  },
+
+  redeemCoupon: async (code: string) => {
+    set({ isLoading: true });
+    try {
+      const res = await PremiumService.redeemCoupon(code);
+      if (res.success && res.entitlement) {
+        set({
+          entitlement: res.entitlement,
+          isPro: true,
+          isPaywallVisible: false,
+          isLoading: false,
+        });
+      } else {
+        set({ isLoading: false });
+      }
+      return {
+        success: res.success,
+        message: res.message,
+      };
+    } catch (err) {
+      set({ isLoading: false });
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Falha ao processar o cupom.',
+      };
     }
   },
 

@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +25,7 @@ interface PaywallModalProps {
 
 export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   const insets = useSafeAreaInsets();
-  const { packages, isPro, purchasePackage, restorePurchases, isLoading } = usePremiumStore();
+  const { packages, isPro, purchasePackage, restorePurchases, redeemCoupon, isLoading } = usePremiumStore();
   const [selectedPlanId, setSelectedPlanId] = useState<string>('scanpro_pro_yearly');
 
   // Estados do Modal de Checkout Seguro e Faturamento
@@ -32,6 +33,11 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'google_play' | 'pix' | 'credit_card'>('google_play');
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
+
+  // Estados do Cupom de Desconto / Gift Card
+  const [isCouponModalVisible, setIsCouponModalVisible] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [isRedeemingCoupon, setIsRedeemingCoupon] = useState(false);
 
   const selectedPkg = packages.find((p) => p.id === selectedPlanId) || packages[0];
 
@@ -86,6 +92,32 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
       }
     } catch {
       Alert.alert('Erro', 'Não foi possível consultar suas compras no momento.');
+    }
+  };
+
+  const handleRedeemCoupon = async (codeToUse?: string) => {
+    const code = (codeToUse || couponCodeInput).trim();
+    if (!code) {
+      Alert.alert('Aviso', 'Digite o código do cupom ou Gift Card para ativar.');
+      return;
+    }
+
+    setIsRedeemingCoupon(true);
+    try {
+      const res = await redeemCoupon(code);
+      if (res.success) {
+        TelemetryService.track('coupon_redeemed', { code: code.toUpperCase() });
+        setIsCouponModalVisible(false);
+        setCouponCodeInput('');
+        Alert.alert('Parabéns! 🎉', res.message);
+        onClose();
+      } else {
+        Alert.alert('Cupom Inválido', res.message);
+      }
+    } catch {
+      Alert.alert('Erro', 'Ocorreu um erro ao processar o código.');
+    } finally {
+      setIsRedeemingCoupon(false);
     }
   };
 
@@ -226,6 +258,29 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                 );
               })}
             </View>
+
+            {/* Banner de Cupom ou Gift Card de Desconto/Ativação */}
+            <TouchableOpacity
+              style={[styles.giftCardBanner, shadows.card]}
+              onPress={() => setIsCouponModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.giftCardIconCircle}>
+                <Ionicons name="gift" size={20} color="#FF9500" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.giftCardTitle}>Possui um Cupom ou Gift Card?</Text>
+                  <View style={styles.giftBadge}>
+                    <Text style={styles.giftBadgeText}>RESGATAR</Text>
+                  </View>
+                </View>
+                <Text style={styles.giftCardSubtitle}>
+                  Ative o Plano Pro diretamente com seu código
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
 
             {/* Botão de Ação CTA */}
             <View style={styles.ctaContainer}>
@@ -431,6 +486,94 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
               </View>
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Resgate de Cupom / Gift Card Pro */}
+      <Modal
+        visible={isCouponModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => !isRedeemingCoupon && setIsCouponModalVisible(false)}
+      >
+        <View style={styles.couponModalOverlay}>
+          <ScrollView
+            contentContainerStyle={styles.couponModalScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.couponModalCard, shadows.elevated]}>
+              <View style={styles.couponModalHeader}>
+                <View style={styles.couponIconCircle}>
+                  <Ionicons name="gift" size={26} color="#FF9500" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.couponModalTitle}>Resgatar Gift Card / Cupom</Text>
+                  <Text style={styles.couponModalSubtitle}>
+                    Ative o Plano Pro completo com seu código promocional
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.couponCloseBtn}
+                  onPress={() => setIsCouponModalVisible(false)}
+                  disabled={isRedeemingCoupon}
+                >
+                  <Ionicons name="close" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.couponInputLabel}>Código de Ativação</Text>
+              <TextInput
+                style={styles.couponInput}
+                value={couponCodeInput}
+                onChangeText={(text) => setCouponCodeInput(text.toUpperCase())}
+                placeholder="Ex: PRO2026 ou SCANPRO-VIP"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!isRedeemingCoupon}
+              />
+
+              {/* Sugestões de Códigos Rápidos para Testes e Demonstração */}
+              <Text style={styles.couponQuickTitle}>Códigos de Demonstração:</Text>
+              <View style={styles.couponQuickRow}>
+                {[
+                  { label: 'PRO2026 (1 Ano)', code: 'PRO2026' },
+                  { label: 'SCANPRO-VIP (1 Ano)', code: 'SCANPRO-VIP' },
+                  { label: 'PRO-VITALICIO (Ilimitado)', code: 'PRO-VITALICIO' },
+                  { label: 'PRO-MENSAL (1 Mês)', code: 'PRO-MENSAL' },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.code}
+                    style={styles.couponQuickChip}
+                    onPress={() => setCouponCodeInput(item.code)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="sparkles" size={11} color="#FF9500" />
+                    <Text style={styles.couponQuickChipText}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.couponActionsRow}>
+                <AppButton
+                  title="Cancelar"
+                  variant="tertiary"
+                  onPress={() => setIsCouponModalVisible(false)}
+                  disabled={isRedeemingCoupon}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  title={isRedeemingCoupon ? 'Validando...' : 'Ativar Plano Pro'}
+                  variant="primary"
+                  onPress={() => handleRedeemCoupon()}
+                  loading={isRedeemingCoupon}
+                  disabled={isRedeemingCoupon || !couponCodeInput.trim()}
+                  style={{ flex: 1 }}
+                  icon={<Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />}
+                />
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </Modal>
@@ -843,5 +986,157 @@ const styles = StyleSheet.create({
     ...typography.subheadline,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+  giftCardBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: radii.cards,
+    padding: spacing.default,
+    marginTop: spacing.small,
+    marginBottom: spacing.default,
+    gap: spacing.compact,
+  },
+  giftCardIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  giftCardTitle: {
+    ...typography.headline,
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '700',
+  },
+  giftCardSubtitle: {
+    ...typography.caption,
+    color: '#B45309',
+    marginTop: 2,
+    fontSize: 12,
+  },
+  giftBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radii.small,
+  },
+  giftBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  couponModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  couponModalScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.default,
+  },
+  couponModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.surface,
+    borderRadius: radii.cards,
+    padding: spacing.default,
+  },
+  couponModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.compact,
+    marginBottom: spacing.small,
+  },
+  couponIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  couponModalTitle: {
+    ...typography.headline,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  couponModalSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  couponCloseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: colors.background,
+  },
+  couponInputLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.compact,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  couponInput: {
+    height: 48,
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    paddingHorizontal: spacing.default,
+    ...typography.body,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#B45309',
+    letterSpacing: 1.2,
+    marginBottom: spacing.small,
+  },
+  couponQuickTitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  couponQuickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.default,
+  },
+  couponQuickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: radii.capsule,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  couponQuickChipText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
+  },
+  couponActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.small,
   },
 });

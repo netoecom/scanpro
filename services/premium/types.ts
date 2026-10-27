@@ -5,7 +5,7 @@
 
 export type SubscriptionTier = 'free' | 'pro';
 
-export type PlanPeriod = 'monthly' | 'yearly';
+export type PlanPeriod = 'monthly' | 'yearly' | 'lifetime';
 
 export interface PaywallPackage {
   id: string;
@@ -24,4 +24,12 @@ export interface PremiumEntitlement {
   plan?: PlanPeriod;
   expirationDate?: string;
   originalPurchaseDate?: string;
+  couponCode?: string;
+  isGiftCard?: boolean;
+}
+
+export interface CouponRedeemResult {
+  success: boolean;
+  message: string;
+  entitlement?: PremiumEntitlement;
 }

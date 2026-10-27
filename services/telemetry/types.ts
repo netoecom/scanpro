@@ -13,7 +13,8 @@ export type FunnelEventName =
   | 'image_shared'
   | 'second_scan'
   | 'paywall_viewed'
-  | 'subscription_purchased';
+  | 'subscription_purchased'
+  | 'coupon_redeemed';
 
 export interface TelemetryEvent {
   id: string;

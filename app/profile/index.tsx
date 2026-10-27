@@ -38,6 +38,7 @@ export default function ProfileScreen() {
     closePaywall,
     cancelSubscription,
     restorePurchases,
+    redeemCoupon,
   } = usePremiumStore();
 
   const [session, setSession] = useState(AuthService.getSession());
@@ -54,6 +55,11 @@ export default function ProfileScreen() {
   const [dropboxTokenInput, setDropboxTokenInput] = useState('');
   const [isConnectingDropbox, setIsConnectingDropbox] = useState(false);
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
+
+  // Estados para cupom de desconto / gift card
+  const [isCouponModalVisible, setIsCouponModalVisible] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [isRedeemingCoupon, setIsRedeemingCoupon] = useState(false);
 
   // Estados para desconexão, escolha de pasta padrão e app key dinâmica do Dropbox
   const [isDisconnectConfirmVisible, setIsDisconnectConfirmVisible] = useState(false);
@@ -182,6 +188,30 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleRedeemCoupon = async (codeToUse?: string) => {
+    const code = (codeToUse || couponCodeInput).trim();
+    if (!code) {
+      Alert.alert('Aviso', 'Digite o código do cupom ou Gift Card para ativar.');
+      return;
+    }
+
+    setIsRedeemingCoupon(true);
+    try {
+      const res = await redeemCoupon(code);
+      if (res.success) {
+        setIsCouponModalVisible(false);
+        setCouponCodeInput('');
+        Alert.alert('Parabéns! 🎉', res.message);
+      } else {
+        Alert.alert('Cupom Inválido', res.message);
+      }
+    } catch {
+      Alert.alert('Erro', 'Ocorreu um erro ao processar o código.');
+    } finally {
+      setIsRedeemingCoupon(false);
+    }
   };
 
   const handleClearTelemetry = () => {
@@ -369,28 +399,49 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.menuItemSubtitle}>
                   {isPro
-                    ? `Plano ${entitlement.plan === 'yearly' ? 'Anual' : 'Mensal'} • Válido até ${entitlement.expirationDate ? new Date(entitlement.expirationDate).toLocaleDateString('pt-BR') : 'ilimitado'}`
-                    : 'Limite de até 5 documentos salvos. Faça upgrade para ter OCR, PDFs HD e digitalizações sem limites.'}
+                    ? `Plano ${entitlement.plan === 'yearly' ? 'Anual' : entitlement.plan === 'lifetime' ? 'Vitalício 💎' : 'Mensal'}${entitlement.isGiftCard ? ' (Gift Card)' : ''} • Válido até ${entitlement.plan === 'lifetime' ? 'Permanente' : entitlement.expirationDate ? new Date(entitlement.expirationDate).toLocaleDateString('pt-BR') : 'ilimitado'}`
+                    : 'Limite de até 5 documentos salvos. Faça upgrade ou ative com um cupom/gift card.'}
                 </Text>
               </View>
             </View>
 
             <View style={styles.proActionButtons}>
               {!isPro ? (
-                <AppButton
-                  title="Fazer Upgrade para o Pro"
-                  variant="primary"
-                  onPress={openPaywall}
-                  icon={<Ionicons name="sparkles" size={16} color="#FFFFFF" />}
-                  style={{ flex: 1 }}
-                />
+                <View style={{ flex: 1, gap: spacing.compact }}>
+                  <AppButton
+                    title="Fazer Upgrade para o Pro"
+                    variant="primary"
+                    onPress={openPaywall}
+                    icon={<Ionicons name="sparkles" size={16} color="#FFFFFF" />}
+                  />
+                  <TouchableOpacity
+                    style={styles.redeemGiftCardBtn}
+                    onPress={() => setIsCouponModalVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="gift-outline" size={16} color="#B45309" />
+                    <Text style={styles.redeemGiftCardBtnText}>Resgatar Gift Card / Cupom 🎁</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
-                <AppButton
-                  title="Cancelar Assinatura"
-                  variant="tertiary"
-                  onPress={handleCancelSubscription}
-                  style={{ flex: 1 }}
-                />
+                <View style={{ flex: 1, gap: spacing.compact }}>
+                  <View style={{ flexDirection: 'row', gap: spacing.small }}>
+                    <AppButton
+                      title="Cancelar Assinatura"
+                      variant="tertiary"
+                      onPress={handleCancelSubscription}
+                      style={{ flex: 1 }}
+                    />
+                    <TouchableOpacity
+                      style={[styles.redeemGiftCardBtn, { flex: 1 }]}
+                      onPress={() => setIsCouponModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="gift-outline" size={15} color="#B45309" />
+                      <Text style={styles.redeemGiftCardBtnText}>Outro Cupom</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
             </View>
           </View>
@@ -1023,6 +1074,83 @@ export default function ProfileScreen() {
         visible={isPaywallVisible}
         onClose={closePaywall}
       />
+
+      {/* Modal de Resgate de Cupom / Gift Card Pro no Perfil */}
+      <Modal
+        visible={isCouponModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => !isRedeemingCoupon && setIsCouponModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView
+            contentContainerStyle={styles.folderModalScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.folderModalDialog, shadows.elevated]}>
+              <View style={styles.dialogHeader}>
+                <Ionicons name="gift" size={26} color="#FF9500" />
+                <Text style={styles.dialogTitle}>Resgatar Gift Card / Cupom</Text>
+              </View>
+              <Text style={styles.dialogSubtitle}>
+                Digite o código de cupom ou cartão presente para ativar seu Plano Pro na hora.
+              </Text>
+
+              <Text style={styles.fieldSectionTitle}>Código do Cupom</Text>
+              <TextInput
+                style={[styles.dialogInput, styles.couponInputStyle]}
+                value={couponCodeInput}
+                onChangeText={(text) => setCouponCodeInput(text.toUpperCase())}
+                placeholder="Ex: PRO2026 ou SCANPRO-VIP"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!isRedeemingCoupon}
+              />
+
+              {/* Sugestões de Códigos Rápidos para Teste */}
+              <Text style={styles.couponQuickLabel}>Códigos de Teste / Demonstração:</Text>
+              <View style={styles.couponChipsRow}>
+                {[
+                  { label: 'PRO2026 (1 Ano)', code: 'PRO2026' },
+                  { label: 'SCANPRO-VIP (1 Ano)', code: 'SCANPRO-VIP' },
+                  { label: 'PRO-VITALICIO (Ilimitado)', code: 'PRO-VITALICIO' },
+                  { label: 'PRO-MENSAL (1 Mês)', code: 'PRO-MENSAL' },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.code}
+                    style={styles.couponChip}
+                    onPress={() => setCouponCodeInput(item.code)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="sparkles" size={11} color="#FF9500" />
+                    <Text style={styles.couponChipText}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.dialogActions}>
+                <AppButton
+                  title="Cancelar"
+                  variant="tertiary"
+                  onPress={() => setIsCouponModalVisible(false)}
+                  disabled={isRedeemingCoupon}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  title={isRedeemingCoupon ? 'Ativando...' : 'Ativar Pro'}
+                  variant="primary"
+                  onPress={() => handleRedeemCoupon()}
+                  loading={isRedeemingCoupon}
+                  disabled={isRedeemingCoupon || !couponCodeInput.trim()}
+                  style={{ flex: 1 }}
+                  icon={<Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />}
+                />
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1728,5 +1856,62 @@ const styles = StyleSheet.create({
   recentChipTextActive: {
     color: colors.primary,
     fontWeight: '700',
+  },
+  redeemGiftCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  redeemGiftCardBtnText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#92400E',
+    fontSize: 12,
+  },
+  couponInputStyle: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    color: '#B45309',
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    fontSize: 15,
+  },
+  couponQuickLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  couponChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.default,
+  },
+  couponChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: radii.capsule,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  couponChipText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
   },
 });

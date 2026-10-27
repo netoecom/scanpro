@@ -4,7 +4,7 @@
  * Local-first com persistência e suporte a compras em web e mobile.
  */
 
-import { PaywallPackage, PremiumEntitlement, PlanPeriod } from './types';
+import { PaywallPackage, PremiumEntitlement, PlanPeriod, CouponRedeemResult } from './types';
 
 const STORAGE_KEY = 'scanpro_premium_entitlement';
 
@@ -97,6 +97,90 @@ export class PremiumService {
     }
 
     return entitlement;
+  }
+
+  /**
+   * Resgata um cupom ou gift card de ativação do Plano Pro
+   */
+  static async redeemCoupon(code: string): Promise<CouponRedeemResult> {
+    const cleanCode = (code || '').trim().toUpperCase().replace(/\s+/g, '');
+
+    if (!cleanCode) {
+      return {
+        success: false,
+        message: 'Por favor, digite o código do cupom ou Gift Card.',
+      };
+    }
+
+    const now = new Date();
+    let period: PlanPeriod = 'yearly';
+    let expiration = new Date();
+    let message = 'Parabéns! Seu Plano Pro foi ativado com sucesso via Gift Card! 🎉';
+
+    // 1. Cupons Vitalícios / Ilimitados
+    const lifetimeCodes = ['PRO-VITALICIO', 'SCANPRO-VITALICIO', 'LIFETIME', 'VIP-LIFETIME', 'SCANPRO-VIP-PERMANENTE'];
+    // 2. Cupons Mensais
+    const monthlyCodes = ['PRO-MENSAL', 'SCANPRO-1M', 'MENSAL-FREE', 'PRO-MES'];
+    // 3. Cupons Anuais (Padrão 1 ano)
+    const yearlyCodes = [
+      'PRO2026',
+      'SCANPROVIP',
+      'SCANPRO-VIP',
+      'PRO-1ANO',
+      'SCANPRO-1Y',
+      'ANUAL-FREE',
+      'GIFTCARD',
+      'PRO-GIFT',
+      'SCANPRO-GIFT',
+      'PROMO2026',
+      'PRO-VIP',
+    ];
+
+    if (lifetimeCodes.includes(cleanCode)) {
+      period = 'lifetime';
+      expiration = new Date('2099-12-31T23:59:59.000Z');
+      message = 'Sensacional! Seu cupom Vitalício foi ativado! Acesso ilimitado e permanente ao ScanPro Pro. 💎';
+    } else if (monthlyCodes.includes(cleanCode)) {
+      period = 'monthly';
+      expiration.setMonth(now.getMonth() + 1);
+      message = 'Gift Card ativado! Você ganhou 1 mês de acesso completo ao ScanPro Pro. 🎉';
+    } else if (
+      yearlyCodes.includes(cleanCode) ||
+      cleanCode.startsWith('GIFT-') ||
+      cleanCode.startsWith('PRO-') ||
+      cleanCode.startsWith('VIP-') ||
+      cleanCode.startsWith('SCAN-') ||
+      cleanCode.startsWith('SCANPRO-')
+    ) {
+      period = 'yearly';
+      expiration.setFullYear(now.getFullYear() + 1);
+      message = 'Gift Card ativado com sucesso! Você ganhou 1 ano completo de ScanPro Pro. 🎉';
+    } else {
+      return {
+        success: false,
+        message: 'Código de cupom ou gift card inválido. Verifique se digitou corretamente.',
+      };
+    }
+
+    const entitlement: PremiumEntitlement = {
+      tier: 'pro',
+      isActive: true,
+      plan: period,
+      couponCode: cleanCode,
+      isGiftCard: true,
+      originalPurchaseDate: now.toISOString(),
+      expirationDate: expiration.toISOString(),
+    };
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entitlement));
+    }
+
+    return {
+      success: true,
+      message,
+      entitlement,
+    };
   }
 
   /**
