@@ -8,8 +8,8 @@
  */
 
 export const REVENUECAT_CONFIG = {
-  // Public SDK Key para inicialização do client
-  apiKey: 'test_JpWoBDOfRdjAkTxnjPtjCaQSeNI',
+  // Public SDK Key oficial da Google Play Store gerada no RevenueCat
+  apiKey: 'goog_IztDxFuLnDacgMOLhCmpRBVjajm',
 
   // Identificador do Entitlement que desbloqueia os recursos no app
   entitlementId: 'pro',
