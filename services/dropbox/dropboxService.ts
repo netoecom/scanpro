@@ -21,7 +21,10 @@ const NATIVE_SESSION_FILE = (FileSystem.documentDirectory || '') + 'dropbox_sess
 // Chave pública do app (App Key) no Dropbox App Console
 // Para OAuth 2.0 PKCE em mobile e web, apenas a App Key pública é necessária.
 const DROPBOX_CLIENT_ID =
-  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID || '1rted05j9p2sb5b';
+  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID &&
+  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID !== 'p7s6z1q7m8a9k2l'
+    ? process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID
+    : '1rted05j9p2sb5b';
 
 export class DropboxService {
   private static session: DropboxSession | null = null;
@@ -29,6 +32,10 @@ export class DropboxService {
   private static listeners: Array<(state: DropboxAuthState) => void> = [];
   private static lastSyncTime: string | null = null;
   private static lastCodeVerifier: string | null = null;
+
+  static getClientId(): string {
+    return DROPBOX_CLIENT_ID;
+  }
 
   /**
    * Inicializa e recupera a sessão salva no armazenamento físico do dispositivo

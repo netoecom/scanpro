@@ -736,6 +736,13 @@ export default function ProfileScreen() {
               <Text style={styles.oauthButtonText}>Autorizar pelo Navegador (OAuth 2.0)</Text>
             </TouchableOpacity>
 
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: spacing.small }}>
+              <Ionicons name="key-outline" size={12} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                App Key: <Text style={{ fontWeight: '700', color: colors.primary }}>{DropboxService.getClientId()}</Text>
+              </Text>
+            </View>
+
             <View style={styles.dialogDividerRow}>
               <View style={styles.dialogDividerLine} />
               <Text style={styles.dialogDividerText}>OU TOKEN DE TESTE</Text>
