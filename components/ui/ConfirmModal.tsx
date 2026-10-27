@@ -19,6 +19,7 @@ export interface ConfirmModalProps {
   cancelText?: string;
   isDestructive?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
+  loading?: boolean;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -31,6 +32,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelText = 'Cancelar',
   isDestructive = true,
   icon = 'trash-outline',
+  loading = false,
   onConfirm,
   onCancel,
 }) => {
@@ -67,12 +69,15 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               title={cancelText}
               variant="tertiary"
               onPress={onCancel}
+              disabled={loading}
               style={styles.actionBtn}
             />
             <AppButton
               title={confirmText}
               variant={isDestructive ? 'destructive' : 'primary'}
               onPress={onConfirm}
+              loading={loading}
+              disabled={loading}
               style={styles.actionBtn}
             />
           </View>

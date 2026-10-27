@@ -61,6 +61,10 @@ export default function ProfileScreen() {
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [isRedeemingCoupon, setIsRedeemingCoupon] = useState(false);
 
+  // Estados para cancelamento de assinatura
+  const [isCancelSubModalVisible, setIsCancelSubModalVisible] = useState(false);
+  const [isCancelingSubscription, setIsCancelingSubscription] = useState(false);
+
   // Estados para desconexão, escolha de pasta padrão e app key dinâmica do Dropbox
   const [isDisconnectConfirmVisible, setIsDisconnectConfirmVisible] = useState(false);
   const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
@@ -173,21 +177,7 @@ export default function ProfileScreen() {
   };
 
   const handleCancelSubscription = () => {
-    Alert.alert(
-      'Cancelar Assinatura Pro',
-      'Deseja retornar ao plano gratuito? Seus documentos locais continuarão preservados.',
-      [
-        { text: 'Manter Pro', style: 'cancel' },
-        {
-          text: 'Cancelar Plano',
-          style: 'destructive',
-          onPress: async () => {
-            await cancelSubscription();
-            Alert.alert('Plano Atualizado', 'Sua assinatura foi cancelada com sucesso.');
-          },
-        },
-      ]
-    );
+    setIsCancelSubModalVisible(true);
   };
 
   const handleRedeemCoupon = async (codeToUse?: string) => {
@@ -430,6 +420,8 @@ export default function ProfileScreen() {
                       title="Cancelar Assinatura"
                       variant="tertiary"
                       onPress={handleCancelSubscription}
+                      disabled={isCancelingSubscription}
+                      loading={isCancelingSubscription}
                       style={{ flex: 1 }}
                     />
                     <TouchableOpacity
@@ -1060,6 +1052,39 @@ export default function ProfileScreen() {
           await DropboxService.disconnect();
         }}
         onCancel={() => setIsDisconnectConfirmVisible(false)}
+      />
+
+      {/* Modal de Confirmação para Cancelar Assinatura Pro (compatível com Web e Mobile) */}
+      <ConfirmModal
+        visible={isCancelSubModalVisible}
+        title="Cancelar Assinatura Pro"
+        message="Deseja retornar ao plano gratuito? Seus documentos locais continuarão salvos e preservados com segurança."
+        confirmText="Cancelar Plano"
+        cancelText="Manter Pro"
+        isDestructive={true}
+        icon="close-circle-outline"
+        loading={isCancelingSubscription}
+        onConfirm={async () => {
+          try {
+            setIsCancelingSubscription(true);
+            await cancelSubscription();
+            setIsCancelSubModalVisible(false);
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.alert('Sua assinatura foi cancelada. O plano retornou para a versão gratuita.');
+            } else {
+              Alert.alert('Plano Atualizado', 'Sua assinatura foi cancelada com sucesso.');
+            }
+          } catch {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.alert('Não foi possível cancelar a assinatura no momento.');
+            } else {
+              Alert.alert('Erro', 'Não foi possível cancelar a assinatura no momento.');
+            }
+          } finally {
+            setIsCancelingSubscription(false);
+          }
+        }}
+        onCancel={() => !isCancelingSubscription && setIsCancelSubModalVisible(false)}
       />
 
       <BottomTabBar />
