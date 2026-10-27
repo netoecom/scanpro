@@ -12,6 +12,8 @@ export interface DropboxSession {
   account: DropboxAccount;
   autoUploadEnabled: boolean;
   targetFolder: string;
+  folderPresets?: string[];
+  recentFolders?: string[];
 }
 
 export interface DropboxUploadResult {
@@ -28,6 +30,8 @@ export interface DropboxAuthState {
   account: DropboxAccount | null;
   autoUploadEnabled: boolean;
   targetFolder: string;
+  folderPresets: string[];
+  recentFolders: string[];
   lastSyncTime: string | null;
   error: string | null;
 }

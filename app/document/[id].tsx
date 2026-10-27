@@ -128,9 +128,14 @@ export default function DocumentDetailScreen() {
   const [editingTitle, setEditingTitle] = useState('');
 
   // Estados para escolha de pasta e nome ao exportar para o Dropbox
+  const [dropboxState, setDropboxState] = useState(DropboxService.getState());
   const [isDropboxUploadModalVisible, setIsDropboxUploadModalVisible] = useState(false);
   const [dropboxUploadFileName, setDropboxUploadFileName] = useState('');
   const [dropboxUploadFolder, setDropboxUploadFolder] = useState('');
+
+  useEffect(() => {
+    return DropboxService.subscribe(setDropboxState);
+  }, []);
 
   // Seleção de páginas específicas para compartilhar
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -329,6 +334,17 @@ export default function DocumentDetailScreen() {
     setDropboxUploadFileName(document.title);
     setDropboxUploadFolder(dropboxState.targetFolder || '/ScanPro');
     setIsDropboxUploadModalVisible(true);
+  };
+
+  const handleSaveCurrentAsPreset = async () => {
+    const clean = dropboxUploadFolder.trim();
+    if (!clean) return;
+    try {
+      await DropboxService.addFolderPreset(clean);
+      Alert.alert('Preset Salvo', `A pasta "${DropboxService.sanitizeFolderPath(clean)}" foi adicionada aos seus atalhos.`);
+    } catch (err) {
+      console.warn('Erro ao salvar preset:', err);
+    }
   };
 
   const handleConfirmDropboxUpload = async () => {
@@ -880,61 +896,146 @@ export default function DocumentDetailScreen() {
         onRequestClose={() => !isSavingToDropbox && setIsDropboxUploadModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.dropboxUploadCard}>
-            <View style={styles.dropboxUploadHeader}>
-              <View style={styles.dropboxUploadIconCircle}>
-                <Ionicons name="logo-dropbox" size={26} color="#0061FE" />
+          <ScrollView
+            contentContainerStyle={styles.dropboxUploadScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.dropboxUploadCard}>
+              <View style={styles.dropboxUploadHeader}>
+                <View style={styles.dropboxUploadIconCircle}>
+                  <Ionicons name="logo-dropbox" size={26} color="#0061FE" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dropboxUploadTitle}>Salvar no Dropbox</Text>
+                  <Text style={styles.dropboxUploadSubtitle}>
+                    Personalize o nome e selecione a pasta de destino
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.dropboxUploadTitle}>Salvar no Dropbox</Text>
-                <Text style={styles.dropboxUploadSubtitle}>
-                  Defina o nome do arquivo e a pasta de destino
-                </Text>
+
+              <Text style={styles.uploadFieldLabel}>Nome do Arquivo PDF</Text>
+              <TextInput
+                style={styles.uploadInput}
+                value={dropboxUploadFileName}
+                onChangeText={setDropboxUploadFileName}
+                placeholder="Nome do documento"
+                editable={!isSavingToDropbox}
+              />
+
+              <View style={styles.folderFieldHeaderRow}>
+                <Text style={styles.uploadFieldLabel}>Pasta no Dropbox</Text>
+                {!dropboxState.folderPresets.includes(dropboxUploadFolder.trim()) && dropboxUploadFolder.trim() !== '' && (
+                  <TouchableOpacity
+                    style={styles.quickSavePresetBtn}
+                    onPress={handleSaveCurrentAsPreset}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="bookmark-outline" size={12} color={colors.primary} />
+                    <Text style={styles.quickSavePresetText}>Salvar como Preset</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TextInput
+                style={styles.uploadInput}
+                value={dropboxUploadFolder}
+                onChangeText={setDropboxUploadFolder}
+                placeholder="/ScanPro"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSavingToDropbox}
+              />
+
+              {/* Presets Salvos */}
+              {dropboxState.folderPresets && dropboxState.folderPresets.length > 0 && (
+                <View style={styles.folderPresetsSection}>
+                  <Text style={styles.uploadChipsTitle}>Presets Salvos (Toque para usar)</Text>
+                  <View style={styles.uploadChipsContainer}>
+                    {dropboxState.folderPresets.map((preset) => (
+                      <TouchableOpacity
+                        key={preset}
+                        style={[
+                          styles.uploadChip,
+                          dropboxUploadFolder === preset && styles.uploadChipActive,
+                        ]}
+                        onPress={() => setDropboxUploadFolder(preset)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="bookmark"
+                          size={11}
+                          color={dropboxUploadFolder === preset ? '#FFFFFF' : colors.primary}
+                        />
+                        <Text
+                          style={[
+                            styles.uploadChipText,
+                            dropboxUploadFolder === preset && styles.uploadChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {preset}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Últimos Usados */}
+              {dropboxState.recentFolders && dropboxState.recentFolders.length > 0 && (
+                <View style={styles.folderPresetsSection}>
+                  <Text style={styles.uploadChipsTitle}>Últimos Usados</Text>
+                  <View style={styles.uploadChipsContainer}>
+                    {dropboxState.recentFolders.map((recent) => (
+                      <TouchableOpacity
+                        key={recent}
+                        style={[
+                          styles.uploadChipRecent,
+                          dropboxUploadFolder === recent && styles.uploadChipRecentActive,
+                        ]}
+                        onPress={() => setDropboxUploadFolder(recent)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={11}
+                          color={dropboxUploadFolder === recent ? colors.primary : colors.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.uploadChipRecentText,
+                            dropboxUploadFolder === recent && styles.uploadChipRecentTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {recent}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.dropboxUploadActions}>
+                <AppButton
+                  title="Cancelar"
+                  variant="tertiary"
+                  onPress={() => setIsDropboxUploadModalVisible(false)}
+                  disabled={isSavingToDropbox}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  title="Salvar"
+                  variant="primary"
+                  onPress={handleConfirmDropboxUpload}
+                  loading={isSavingToDropbox}
+                  disabled={isSavingToDropbox}
+                  style={{ flex: 1 }}
+                  icon={<Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />}
+                />
               </View>
             </View>
-
-            <Text style={styles.uploadFieldLabel}>Nome do Arquivo PDF</Text>
-            <TextInput
-              style={styles.uploadInput}
-              value={dropboxUploadFileName}
-              onChangeText={setDropboxUploadFileName}
-              placeholder="Nome do documento"
-              editable={!isSavingToDropbox}
-            />
-
-            <Text style={styles.uploadFieldLabel}>Pasta no Dropbox</Text>
-            <TextInput
-              style={styles.uploadInput}
-              value={dropboxUploadFolder}
-              onChangeText={setDropboxUploadFolder}
-              placeholder="/ScanPro"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSavingToDropbox}
-            />
-            <Text style={styles.uploadFieldHint}>
-              Padrão configurado no Perfil: <Text style={{ fontWeight: '700', color: colors.primary }}>{DropboxService.getState().targetFolder || '/ScanPro'}</Text>
-            </Text>
-
-            <View style={styles.dropboxUploadActions}>
-              <AppButton
-                title="Cancelar"
-                variant="tertiary"
-                onPress={() => setIsDropboxUploadModalVisible(false)}
-                disabled={isSavingToDropbox}
-                style={{ flex: 1 }}
-              />
-              <AppButton
-                title="Salvar"
-                variant="primary"
-                onPress={handleConfirmDropboxUpload}
-                loading={isSavingToDropbox}
-                disabled={isSavingToDropbox}
-                style={{ flex: 1 }}
-                icon={<Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />}
-              />
-            </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1391,8 +1492,105 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: spacing.default,
   },
+  dropboxUploadScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.default * 1.5,
+    paddingHorizontal: spacing.default,
+  },
+  folderFieldHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.compact,
+    marginBottom: 4,
+  },
+  quickSavePresetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.capsule,
+    backgroundColor: '#E0EEFF',
+  },
+  quickSavePresetText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  folderPresetsSection: {
+    marginTop: spacing.compact,
+  },
+  uploadChipsTitle: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  uploadChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  uploadChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.capsule,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  uploadChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  uploadChipText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: 11,
+  },
+  uploadChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  uploadChipRecent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.background,
+    borderRadius: radii.capsule,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  uploadChipRecentActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#E0EEFF',
+  },
+  uploadChipRecentText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  uploadChipRecentTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
   dropboxUploadActions: {
     flexDirection: 'row',
     gap: spacing.small,
+    marginTop: spacing.default,
   },
 });

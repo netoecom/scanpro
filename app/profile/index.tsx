@@ -59,6 +59,7 @@ export default function ProfileScreen() {
   const [isDisconnectConfirmVisible, setIsDisconnectConfirmVisible] = useState(false);
   const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
   const [customFolderInput, setCustomFolderInput] = useState(dropboxState.targetFolder || '/ScanPro');
+  const [newPresetInput, setNewPresetInput] = useState('');
   const [customAppKeyInput, setCustomAppKeyInput] = useState(DropboxService.getClientId());
 
   useEffect(() => {
@@ -256,16 +257,37 @@ export default function ProfileScreen() {
 
   const handleOpenFolderModal = () => {
     setCustomFolderInput(dropboxState.targetFolder || '/ScanPro');
+    setNewPresetInput('');
     setIsFolderModalVisible(true);
   };
 
-  const handleSaveTargetFolder = async () => {
+  const handleSaveTargetFolder = async (folderToSave?: string) => {
     try {
-      await DropboxService.setTargetFolder(customFolderInput);
+      const target = folderToSave || customFolderInput;
+      await DropboxService.setTargetFolder(target);
       setIsFolderModalVisible(false);
       Alert.alert('Pasta Atualizada', `A pasta padrão foi definida para "${DropboxService.getState().targetFolder}".`);
     } catch (err) {
       Alert.alert('Erro', 'Não foi possível salvar a pasta.');
+    }
+  };
+
+  const handleAddPreset = async () => {
+    const clean = newPresetInput.trim();
+    if (!clean) return;
+    try {
+      await DropboxService.addFolderPreset(clean);
+      setNewPresetInput('');
+    } catch (err) {
+      Alert.alert('Erro', 'Não foi possível adicionar o preset.');
+    }
+  };
+
+  const handleRemovePreset = async (preset: string) => {
+    try {
+      await DropboxService.removeFolderPreset(preset);
+    } catch (err) {
+      console.warn('Erro ao remover preset:', err);
     }
   };
 
@@ -817,7 +839,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Modal de Escolha da Pasta Padrão no Dropbox */}
+      {/* Modal de Escolha da Pasta Padrão e Presets no Dropbox */}
       <Modal
         visible={isFolderModalVisible}
         transparent={true}
@@ -825,37 +847,151 @@ export default function ProfileScreen() {
         onRequestClose={() => setIsFolderModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalDialog}>
-            <View style={styles.dialogHeader}>
-              <Ionicons name="folder-open" size={26} color={colors.primary} />
-              <Text style={styles.dialogTitle}>Pasta Padrão do Dropbox</Text>
-            </View>
-            <Text style={styles.dialogSubtitle}>
-              Digite a pasta dentro da sua conta do Dropbox onde novos scans serão salvos (ex: /ScanPro ou /Documentos/Empresa).
-            </Text>
-            <TextInput
-              style={styles.dialogInput}
-              value={customFolderInput}
-              onChangeText={setCustomFolderInput}
-              placeholder="/ScanPro"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <View style={styles.dialogActions}>
-              <AppButton
-                title="Cancelar"
-                variant="tertiary"
-                onPress={() => setIsFolderModalVisible(false)}
-                style={{ flex: 1 }}
+          <ScrollView
+            contentContainerStyle={styles.folderModalScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.folderModalDialog}>
+              <View style={styles.dialogHeader}>
+                <Ionicons name="folder-open" size={26} color={colors.primary} />
+                <Text style={styles.dialogTitle}>Pastas no Dropbox</Text>
+              </View>
+              <Text style={styles.dialogSubtitle}>
+                Defina sua pasta padrão, cadastre atalhos (presets) ou escolha um dos últimos caminhos usados.
+              </Text>
+
+              {/* Seção 1: Pasta Padrão Atual / Manual */}
+              <Text style={styles.fieldSectionTitle}>Pasta Padrão Ativa</Text>
+              <TextInput
+                style={styles.dialogInput}
+                value={customFolderInput}
+                onChangeText={setCustomFolderInput}
+                placeholder="/ScanPro"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-              <AppButton
-                title="Salvar Pasta"
-                variant="primary"
-                onPress={handleSaveTargetFolder}
-                style={{ flex: 1 }}
-              />
+
+              {/* Seção 2: Presets Cadastrados */}
+              <Text style={styles.fieldSectionTitle}>Presets de Pastas Salvos</Text>
+              <View style={styles.presetChipsContainer}>
+                {(dropboxState.folderPresets || ['/ScanPro']).map((preset) => (
+                  <View
+                    key={preset}
+                    style={[
+                      styles.presetChip,
+                      customFolderInput === preset && styles.presetChipActive,
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.presetChipBody}
+                      onPress={() => setCustomFolderInput(preset)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="bookmark"
+                        size={13}
+                        color={customFolderInput === preset ? '#FFFFFF' : colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          customFolderInput === preset && styles.presetChipTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {preset}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {preset !== '/ScanPro' && (
+                      <TouchableOpacity
+                        style={styles.presetChipRemove}
+                        onPress={() => handleRemovePreset(preset)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={15}
+                          color={customFolderInput === preset ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+
+              {/* Adicionar Novo Preset */}
+              <View style={styles.addPresetRow}>
+                <TextInput
+                  style={styles.addPresetInput}
+                  value={newPresetInput}
+                  onChangeText={setNewPresetInput}
+                  placeholder="Cadastrar novo caminho (ex: /Contratos)..."
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={[styles.addPresetBtn, !newPresetInput.trim() && styles.addPresetBtnDisabled]}
+                  onPress={handleAddPreset}
+                  disabled={!newPresetInput.trim()}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={16} color="#FFFFFF" />
+                  <Text style={styles.addPresetBtnText}>Adicionar</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Seção 3: Últimos Caminhos Usados */}
+              {dropboxState.recentFolders && dropboxState.recentFolders.length > 0 && (
+                <View style={{ marginTop: spacing.compact }}>
+                  <Text style={styles.fieldSectionTitle}>Últimos Caminhos Usados</Text>
+                  <View style={styles.presetChipsContainer}>
+                    {dropboxState.recentFolders.map((recent) => (
+                      <TouchableOpacity
+                        key={recent}
+                        style={[
+                          styles.recentChip,
+                          customFolderInput === recent && styles.recentChipActive,
+                        ]}
+                        onPress={() => setCustomFolderInput(recent)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={13}
+                          color={customFolderInput === recent ? colors.primary : colors.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.recentChipText,
+                            customFolderInput === recent && styles.recentChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {recent}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.dialogActions}>
+                <AppButton
+                  title="Cancelar"
+                  variant="tertiary"
+                  onPress={() => setIsFolderModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  title="Salvar como Padrão"
+                  variant="primary"
+                  onPress={() => handleSaveTargetFolder()}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1468,5 +1604,129 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.primary,
     fontWeight: '600',
+  },
+  folderModalScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.default * 2,
+    paddingHorizontal: spacing.default,
+  },
+  folderModalDialog: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radii.cards,
+    padding: spacing.default,
+    ...shadows.elevated,
+  },
+  fieldSectionTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  presetChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.small,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.capsule,
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  presetChipBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 220,
+  },
+  presetChipText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: 12,
+  },
+  presetChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  presetChipRemove: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  addPresetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.compact,
+    marginBottom: spacing.compact,
+  },
+  addPresetInput: {
+    flex: 1,
+    height: 38,
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.compact,
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
+  addPresetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radii.standard,
+    paddingHorizontal: 12,
+    height: 38,
+    gap: 4,
+  },
+  addPresetBtnDisabled: {
+    opacity: 0.5,
+  },
+  addPresetBtnText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: radii.capsule,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    gap: 6,
+  },
+  recentChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#E0EEFF',
+  },
+  recentChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  recentChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
 });

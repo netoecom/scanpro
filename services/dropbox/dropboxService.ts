@@ -68,15 +68,39 @@ export class DropboxService {
   }
 
   /**
+   * Sanitiza e padroniza o caminho da pasta dentro do Dropbox
+   */
+  static sanitizeFolderPath(folder: string): string {
+    let clean = (folder || '').trim().replace(/\\/g, '/');
+    if (!clean.startsWith('/')) {
+      clean = '/' + clean;
+    }
+    clean = clean.replace(/\/+/g, '/').replace(/\/+$/, '');
+    return clean || '/ScanPro';
+  }
+
+  /**
    * Retorna o estado atual da autenticação
    */
   static getState(): DropboxAuthState {
+    const defaultPresets = ['/ScanPro', '/Documentos', '/Notas Fiscais', '/Contratos'];
+    const currentPresets =
+      this.session && this.session.folderPresets && this.session.folderPresets.length > 0
+        ? this.session.folderPresets
+        : defaultPresets;
+    const currentRecents =
+      this.session && this.session.recentFolders && this.session.recentFolders.length > 0
+        ? this.session.recentFolders
+        : [this.session ? this.session.targetFolder : '/ScanPro'];
+
     return {
       isConnected: !!this.session,
       isLoading: !this.isInitialized,
       account: this.session ? this.session.account : null,
       autoUploadEnabled: this.session ? this.session.autoUploadEnabled : false,
       targetFolder: this.session ? this.session.targetFolder : '/ScanPro',
+      folderPresets: currentPresets,
+      recentFolders: currentRecents,
       lastSyncTime: this.lastSyncTime,
       error: null,
     };
@@ -340,16 +364,50 @@ export class DropboxService {
   }
 
   /**
-   * Altera a pasta de destino dentro do Dropbox (ex: '/Documentos/ScanPro')
+   * Adiciona um caminho à lista de Presets de Pastas
+   */
+  static async addFolderPreset(folder: string): Promise<void> {
+    if (!this.session) return;
+    const clean = this.sanitizeFolderPath(folder);
+    const existing = this.session.folderPresets || ['/ScanPro', '/Documentos', '/Notas Fiscais', '/Contratos'];
+    if (!existing.includes(clean)) {
+      this.session.folderPresets = [...existing, clean];
+      await this.persistSession();
+    }
+  }
+
+  /**
+   * Remove um caminho da lista de Presets de Pastas
+   */
+  static async removeFolderPreset(folder: string): Promise<void> {
+    if (!this.session) return;
+    const clean = this.sanitizeFolderPath(folder);
+    const existing = this.session.folderPresets || ['/ScanPro'];
+    const updated = existing.filter((f) => f !== clean);
+    this.session.folderPresets = updated.length > 0 ? updated : ['/ScanPro'];
+    await this.persistSession();
+  }
+
+  /**
+   * Registra uma pasta utilizada recentemente (mantendo os últimos 6)
+   */
+  static async recordRecentFolder(folder: string): Promise<void> {
+    if (!this.session) return;
+    const clean = this.sanitizeFolderPath(folder);
+    const existing = this.session.recentFolders || ['/ScanPro'];
+    const filtered = existing.filter((f) => f !== clean);
+    this.session.recentFolders = [clean, ...filtered].slice(0, 6);
+    await this.persistSession();
+  }
+
+  /**
+   * Altera a pasta de destino padrão dentro do Dropbox (ex: '/Documentos/ScanPro')
    */
   static async setTargetFolder(folder: string): Promise<void> {
     if (!this.session) return;
-    let cleanFolder = folder.trim();
-    if (!cleanFolder.startsWith('/')) {
-      cleanFolder = '/' + cleanFolder;
-    }
-    cleanFolder = cleanFolder.replace(/\/+$/, '');
-    this.session.targetFolder = cleanFolder || '/ScanPro';
+    const cleanFolder = this.sanitizeFolderPath(folder);
+    this.session.targetFolder = cleanFolder;
+    await this.recordRecentFolder(cleanFolder);
     await this.persistSession();
   }
 
@@ -365,13 +423,9 @@ export class DropboxService {
       throw new Error('Dropbox não está conectado. Conecte sua conta para fazer o upload.');
     }
 
-    let baseFolder = (subFolder !== undefined ? subFolder : this.session.targetFolder) || '/ScanPro';
-    baseFolder = baseFolder.trim();
-    if (!baseFolder.startsWith('/')) {
-      baseFolder = '/' + baseFolder;
-    }
-    baseFolder = baseFolder.replace(/\/+$/, '');
-    if (!baseFolder) baseFolder = '/ScanPro';
+    const baseFolder = this.sanitizeFolderPath(
+      subFolder !== undefined ? subFolder : this.session.targetFolder
+    );
 
     // Sanitiza o nome do arquivo para padrão PDF
     let safeName = fileName.replace(/[/\\?%*:|"<>]/g, '_').trim();
@@ -442,6 +496,7 @@ export class DropboxService {
     }
 
     this.lastSyncTime = new Date().toISOString();
+    await this.recordRecentFolder(baseFolder);
     this.notifyListeners();
 
     return {
