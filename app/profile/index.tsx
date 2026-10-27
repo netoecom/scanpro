@@ -9,9 +9,10 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
 import { BottomTabBar, AppButton, OnboardingInstallModal, PaywallModal } from '../../components/ui';
@@ -27,6 +28,7 @@ import Constants from 'expo-constants';
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { code } = useLocalSearchParams<{ code?: string }>();
   const { documents, loadDocuments, loadFolders } = useDocumentStore();
   const {
     isPro,
@@ -56,6 +58,26 @@ export default function ProfileScreen() {
   useEffect(() => {
     return DropboxService.subscribe(setDropboxState);
   }, []);
+
+  // Processa retorno do OAuth do Dropbox com ?code=XYZ após autorização no navegador
+  useEffect(() => {
+    if (code && !dropboxState.isConnected && !isConnectingDropbox) {
+      (async () => {
+        try {
+          setIsConnectingDropbox(true);
+          await DropboxService.exchangeCodeForToken(code);
+          Alert.alert('Dropbox Conectado!', 'Sua conta foi integrada com sucesso.');
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (err) {
+          Alert.alert('Falha na Conexão', err instanceof Error ? err.message : 'Não foi possível completar a autorização.');
+        } finally {
+          setIsConnectingDropbox(false);
+        }
+      })();
+    }
+  }, [code, dropboxState.isConnected]);
 
   const totalPages = documents.reduce((acc, doc) => acc + doc.pageCount, 0);
 
@@ -182,7 +204,11 @@ export default function ProfileScreen() {
   const handleStartPkceAuth = async () => {
     try {
       const { url } = await DropboxService.getAuthorizationUrl();
-      await Linking.openURL(url);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = url;
+      } else {
+        await Linking.openURL(url);
+      }
     } catch (err) {
       Alert.alert(
         'Aviso',

@@ -19,9 +19,9 @@ const STORAGE_KEY = 'scanpro_dropbox_session_v1';
 const NATIVE_SESSION_FILE = (FileSystem.documentDirectory || '') + 'dropbox_session.json';
 
 // Chave pública do app (App Key) no Dropbox App Console
-// Para OAuth 2.0 PKCE em mobile, apenas a App Key pública é necessária.
+// Para OAuth 2.0 PKCE em mobile e web, apenas a App Key pública é necessária.
 const DROPBOX_CLIENT_ID =
-  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID || 'p7s6z1q7m8a9k2l';
+  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID || '1rted05j9p2sb5b';
 
 export class DropboxService {
   private static session: DropboxSession | null = null;
@@ -161,14 +161,30 @@ export class DropboxService {
       .replace(/=+$/, '');
 
     this.lastCodeVerifier = verifier;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem('scanpro_dropbox_code_verifier', verifier);
+      } catch {}
+    }
     return { verifier, challenge };
+  }
+
+  /**
+   * Obtém o redirect URI dinamicamente respeitando o domínio atual no Web ou scheme mobile
+   */
+  static getCallbackUri(redirectUri?: string): string {
+    if (redirectUri) return redirectUri;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      return `${window.location.origin}/profile`;
+    }
+    return Linking.createURL('dropbox-auth');
   }
 
   /**
    * Constrói a URL de autorização OAuth 2.0 PKCE do Dropbox
    */
   static async getAuthorizationUrl(redirectUri?: string): Promise<{ url: string; verifier: string }> {
-    const callbackUri = redirectUri || Linking.createURL('dropbox-auth');
+    const callbackUri = this.getCallbackUri(redirectUri);
     const { verifier, challenge } = await this.generatePkceChallenge();
 
     const params = new URLSearchParams({
@@ -188,8 +204,14 @@ export class DropboxService {
    * Troca o authorization code pelo access token (com refresh token) usando PKCE
    */
   static async exchangeCodeForToken(code: string, verifier?: string, redirectUri?: string): Promise<DropboxSession> {
-    const codeVerifier = verifier || this.lastCodeVerifier;
-    const callbackUri = redirectUri || Linking.createURL('dropbox-auth');
+    let codeVerifier = verifier || this.lastCodeVerifier;
+    if (!codeVerifier && Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      try {
+        codeVerifier = sessionStorage.getItem('scanpro_dropbox_code_verifier');
+      } catch {}
+    }
+
+    const callbackUri = this.getCallbackUri(redirectUri);
 
     const bodyParams = new URLSearchParams({
       code: code.trim(),
