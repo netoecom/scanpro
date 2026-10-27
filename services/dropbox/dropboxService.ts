@@ -18,13 +18,8 @@ import {
 const STORAGE_KEY = 'scanpro_dropbox_session_v1';
 const NATIVE_SESSION_FILE = (FileSystem.documentDirectory || '') + 'dropbox_session.json';
 
-// Chave pública do app (App Key) no Dropbox App Console
-// Para OAuth 2.0 PKCE em mobile e web, apenas a App Key pública é necessária.
-const DROPBOX_CLIENT_ID =
-  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID &&
-  process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID !== 'p7s6z1q7m8a9k2l'
-    ? process.env.EXPO_PUBLIC_DROPBOX_CLIENT_ID
-    : '1rted05j9p2sb5b';
+// Chave pública oficial do app (App Key) no Dropbox Developer Console
+const DROPBOX_CLIENT_ID = '1rted05j9p2sb5b';
 
 export class DropboxService {
   private static session: DropboxSession | null = null;
@@ -190,12 +185,19 @@ export class DropboxService {
   /**
    * Constrói a URL de autorização OAuth 2.0 PKCE do Dropbox
    */
-  static async getAuthorizationUrl(redirectUri?: string): Promise<{ url: string; verifier: string }> {
+  static async getAuthorizationUrl(customClientId?: string, redirectUri?: string): Promise<{ url: string; verifier: string }> {
     const callbackUri = this.getCallbackUri(redirectUri);
     const { verifier, challenge } = await this.generatePkceChallenge();
+    const activeClientId = (customClientId && customClientId.trim()) || DROPBOX_CLIENT_ID;
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem('scanpro_dropbox_client_id', activeClientId);
+      } catch {}
+    }
 
     const params = new URLSearchParams({
-      client_id: DROPBOX_CLIENT_ID,
+      client_id: activeClientId,
       response_type: 'code',
       code_challenge: challenge,
       code_challenge_method: 'S256',
@@ -210,11 +212,26 @@ export class DropboxService {
   /**
    * Troca o authorization code pelo access token (com refresh token) usando PKCE
    */
-  static async exchangeCodeForToken(code: string, verifier?: string, redirectUri?: string): Promise<DropboxSession> {
+  static async exchangeCodeForToken(
+    code: string,
+    verifier?: string,
+    redirectUri?: string,
+    customClientId?: string
+  ): Promise<DropboxSession> {
     let codeVerifier = verifier || this.lastCodeVerifier;
-    if (!codeVerifier && Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+    let activeClientId = (customClientId && customClientId.trim()) || DROPBOX_CLIENT_ID;
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
       try {
-        codeVerifier = sessionStorage.getItem('scanpro_dropbox_code_verifier');
+        if (!codeVerifier) {
+          codeVerifier = sessionStorage.getItem('scanpro_dropbox_code_verifier');
+        }
+        if (!customClientId) {
+          const storedClientId = sessionStorage.getItem('scanpro_dropbox_client_id');
+          if (storedClientId) {
+            activeClientId = storedClientId;
+          }
+        }
       } catch {}
     }
 
@@ -223,7 +240,7 @@ export class DropboxService {
     const bodyParams = new URLSearchParams({
       code: code.trim(),
       grant_type: 'authorization_code',
-      client_id: DROPBOX_CLIENT_ID,
+      client_id: activeClientId,
       redirect_uri: callbackUri,
       code_verifier: codeVerifier || '',
     });
@@ -331,7 +348,8 @@ export class DropboxService {
     if (!cleanFolder.startsWith('/')) {
       cleanFolder = '/' + cleanFolder;
     }
-    this.session.targetFolder = cleanFolder;
+    cleanFolder = cleanFolder.replace(/\/+$/, '');
+    this.session.targetFolder = cleanFolder || '/ScanPro';
     await this.persistSession();
   }
 
@@ -347,14 +365,21 @@ export class DropboxService {
       throw new Error('Dropbox não está conectado. Conecte sua conta para fazer o upload.');
     }
 
-    const baseFolder = subFolder || this.session.targetFolder || '/ScanPro';
+    let baseFolder = (subFolder !== undefined ? subFolder : this.session.targetFolder) || '/ScanPro';
+    baseFolder = baseFolder.trim();
+    if (!baseFolder.startsWith('/')) {
+      baseFolder = '/' + baseFolder;
+    }
+    baseFolder = baseFolder.replace(/\/+$/, '');
+    if (!baseFolder) baseFolder = '/ScanPro';
+
     // Sanitiza o nome do arquivo para padrão PDF
     let safeName = fileName.replace(/[/\\?%*:|"<>]/g, '_').trim();
     if (!safeName.toLowerCase().endsWith('.pdf')) {
       safeName += '.pdf';
     }
 
-    const dropboxPath = `${baseFolder.replace(/\/$/, '')}/${safeName}`;
+    const dropboxPath = `${baseFolder}/${safeName}`;
     const uploadArg = JSON.stringify({
       path: dropboxPath,
       mode: 'add',

@@ -3,7 +3,7 @@
  * Habilita instalação PWA no Chromium, cache offline e resiliência total de rede.
  */
 
-const CACHE_NAME = 'scanpro-cache-v1.0.9';
+const CACHE_NAME = 'scanpro-cache-v1.0.10';
 const PRECACHE_RESOURCES = [
   '/',
   '/manifest.json',

@@ -127,6 +127,11 @@ export default function DocumentDetailScreen() {
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
 
+  // Estados para escolha de pasta e nome ao exportar para o Dropbox
+  const [isDropboxUploadModalVisible, setIsDropboxUploadModalVisible] = useState(false);
+  const [dropboxUploadFileName, setDropboxUploadFileName] = useState('');
+  const [dropboxUploadFolder, setDropboxUploadFolder] = useState('');
+
   // Seleção de páginas específicas para compartilhar
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
 
@@ -297,7 +302,7 @@ export default function DocumentDetailScreen() {
     }
   };
 
-  const handleSaveToDropbox = async () => {
+  const handleOpenDropboxModal = () => {
     setIsShareModalVisible(false);
 
     if (!isPro) {
@@ -321,6 +326,12 @@ export default function DocumentDetailScreen() {
       return;
     }
 
+    setDropboxUploadFileName(document.title);
+    setDropboxUploadFolder(dropboxState.targetFolder || '/ScanPro');
+    setIsDropboxUploadModalVisible(true);
+  };
+
+  const handleConfirmDropboxUpload = async () => {
     const pagesToExport = currentPages
       .filter((p) => selectedPageIds.has(p.id))
       .map((p) => ({
@@ -333,8 +344,11 @@ export default function DocumentDetailScreen() {
 
     try {
       setIsSavingToDropbox(true);
+      const activeTitle = dropboxUploadFileName.trim() || document.title;
+      const activeFolder = dropboxUploadFolder.trim() || DropboxService.getState().targetFolder || '/ScanPro';
+
       const result = await PdfService.generatePdf({
-        title: document.title,
+        title: activeTitle,
         pages: pagesToExport,
       });
 
@@ -342,8 +356,13 @@ export default function DocumentDetailScreen() {
         await updateDocumentPdf(id, result.uri);
       }
 
-      const uploadResult = await DropboxService.uploadPdf(result.uri, document.title);
+      const uploadResult = await DropboxService.uploadPdf(
+        result.uri,
+        activeTitle,
+        activeFolder
+      );
 
+      setIsDropboxUploadModalVisible(false);
       Alert.alert(
         'Salvo no Dropbox! 🎉',
         `O arquivo "${uploadResult.name}" foi salvo com sucesso em ${uploadResult.pathDisplay}.`
@@ -736,7 +755,7 @@ export default function DocumentDetailScreen() {
             {/* Opção 3: Salvar no Dropbox (PRO) */}
             <TouchableOpacity
               style={styles.shareOptionCard}
-              onPress={handleSaveToDropbox}
+              onPress={handleOpenDropboxModal}
               activeOpacity={0.8}
             >
               <View style={[styles.shareOptionIconWrap, { backgroundColor: 'rgba(0, 97, 254, 0.12)' }]}>
@@ -750,7 +769,7 @@ export default function DocumentDetailScreen() {
                   </View>
                 </View>
                 <Text style={styles.shareOptionDesc}>
-                  Enviar PDF consolidado para a pasta /ScanPro no seu Dropbox
+                  Escolher pasta e exportar PDF direto para sua conta na nuvem
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -852,6 +871,72 @@ export default function DocumentDetailScreen() {
         }}
         onCancel={() => setDeleteConfirmTarget(null)}
       />
+
+      {/* Modal de Escolha de Pasta e Nome para Salvar no Dropbox */}
+      <Modal
+        visible={isDropboxUploadModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => !isSavingToDropbox && setIsDropboxUploadModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.dropboxUploadCard}>
+            <View style={styles.dropboxUploadHeader}>
+              <View style={styles.dropboxUploadIconCircle}>
+                <Ionicons name="logo-dropbox" size={26} color="#0061FE" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dropboxUploadTitle}>Salvar no Dropbox</Text>
+                <Text style={styles.dropboxUploadSubtitle}>
+                  Defina o nome do arquivo e a pasta de destino
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.uploadFieldLabel}>Nome do Arquivo PDF</Text>
+            <TextInput
+              style={styles.uploadInput}
+              value={dropboxUploadFileName}
+              onChangeText={setDropboxUploadFileName}
+              placeholder="Nome do documento"
+              editable={!isSavingToDropbox}
+            />
+
+            <Text style={styles.uploadFieldLabel}>Pasta no Dropbox</Text>
+            <TextInput
+              style={styles.uploadInput}
+              value={dropboxUploadFolder}
+              onChangeText={setDropboxUploadFolder}
+              placeholder="/ScanPro"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isSavingToDropbox}
+            />
+            <Text style={styles.uploadFieldHint}>
+              Padrão configurado no Perfil: <Text style={{ fontWeight: '700', color: colors.primary }}>{DropboxService.getState().targetFolder || '/ScanPro'}</Text>
+            </Text>
+
+            <View style={styles.dropboxUploadActions}>
+              <AppButton
+                title="Cancelar"
+                variant="tertiary"
+                onPress={() => setIsDropboxUploadModalVisible(false)}
+                disabled={isSavingToDropbox}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                title="Salvar"
+                variant="primary"
+                onPress={handleConfirmDropboxUpload}
+                loading={isSavingToDropbox}
+                disabled={isSavingToDropbox}
+                style={{ flex: 1 }}
+                icon={<Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Loading Overlay ao Salvar no Dropbox */}
       {isSavingToDropbox && (
@@ -1249,5 +1334,65 @@ const styles = StyleSheet.create({
   savingText: {
     ...typography.headline,
     color: colors.textPrimary,
+  },
+  dropboxUploadCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.surface,
+    borderRadius: radii.prominentCards,
+    padding: spacing.default,
+    ...shadows.elevated,
+  },
+  dropboxUploadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.compact,
+    marginBottom: spacing.small,
+  },
+  dropboxUploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E0EEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropboxUploadTitle: {
+    ...typography.headline,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  dropboxUploadSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  uploadFieldLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.compact,
+    marginBottom: 4,
+  },
+  uploadInput: {
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.compact,
+    paddingVertical: spacing.small,
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  uploadFieldHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 4,
+    marginBottom: spacing.default,
+  },
+  dropboxUploadActions: {
+    flexDirection: 'row',
+    gap: spacing.small,
   },
 });

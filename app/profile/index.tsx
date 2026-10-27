@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
-import { BottomTabBar, AppButton, OnboardingInstallModal, PaywallModal } from '../../components/ui';
+import { BottomTabBar, AppButton, OnboardingInstallModal, PaywallModal, ConfirmModal } from '../../components/ui';
 import { useDocumentStore, usePremiumStore } from '../../store';
 import { AuthService } from '../../services/auth';
 import { SyncService, SyncOverview } from '../../services/sync';
@@ -55,8 +55,17 @@ export default function ProfileScreen() {
   const [isConnectingDropbox, setIsConnectingDropbox] = useState(false);
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
 
+  // Estados para desconexão, escolha de pasta padrão e app key dinâmica do Dropbox
+  const [isDisconnectConfirmVisible, setIsDisconnectConfirmVisible] = useState(false);
+  const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
+  const [customFolderInput, setCustomFolderInput] = useState(dropboxState.targetFolder || '/ScanPro');
+  const [customAppKeyInput, setCustomAppKeyInput] = useState(DropboxService.getClientId());
+
   useEffect(() => {
-    return DropboxService.subscribe(setDropboxState);
+    return DropboxService.subscribe((state) => {
+      setDropboxState(state);
+      setCustomFolderInput(state.targetFolder || '/ScanPro');
+    });
   }, []);
 
   // Processa retorno do OAuth do Dropbox com ?code=XYZ após autorização no navegador
@@ -203,7 +212,8 @@ export default function ProfileScreen() {
 
   const handleStartPkceAuth = async () => {
     try {
-      const { url } = await DropboxService.getAuthorizationUrl();
+      const activeAppKey = customAppKeyInput.trim() || DropboxService.getClientId();
+      const { url } = await DropboxService.getAuthorizationUrl(activeAppKey);
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.location.href = url;
       } else {
@@ -244,22 +254,23 @@ export default function ProfileScreen() {
     await DropboxService.setAutoUpload(!dropboxState.autoUploadEnabled);
   };
 
+  const handleOpenFolderModal = () => {
+    setCustomFolderInput(dropboxState.targetFolder || '/ScanPro');
+    setIsFolderModalVisible(true);
+  };
+
+  const handleSaveTargetFolder = async () => {
+    try {
+      await DropboxService.setTargetFolder(customFolderInput);
+      setIsFolderModalVisible(false);
+      Alert.alert('Pasta Atualizada', `A pasta padrão foi definida para "${DropboxService.getState().targetFolder}".`);
+    } catch (err) {
+      Alert.alert('Erro', 'Não foi possível salvar a pasta.');
+    }
+  };
+
   const handleDisconnectDropbox = () => {
-    Alert.alert(
-      'Desconectar Dropbox',
-      'Deseja desconectar sua conta do Dropbox? O aplicativo continuará funcionando normalmente em modo local.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Desconectar',
-          style: 'destructive',
-          onPress: async () => {
-            await DropboxService.disconnect();
-            Alert.alert('Desconectado', 'Sua conta do Dropbox foi desconectada.');
-          },
-        },
-      ]
-    );
+    setIsDisconnectConfirmVisible(true);
   };
 
   return (
@@ -461,6 +472,26 @@ export default function ProfileScreen() {
 
             {dropboxState.isConnected ? (
               <View style={styles.dropboxConnectedControls}>
+                {/* Configuração da Pasta Padrão */}
+                <View style={styles.dropboxFolderRow}>
+                  <View style={styles.dropboxFolderInfo}>
+                    <Ionicons name="folder-outline" size={20} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dropboxFolderLabel}>Pasta Padrão no Dropbox</Text>
+                      <Text style={styles.dropboxFolderPath} numberOfLines={1}>
+                        {dropboxState.targetFolder || '/ScanPro'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.changeFolderButton}
+                    onPress={handleOpenFolderModal}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.changeFolderButtonText}>Alterar</Text>
+                  </TouchableOpacity>
+                </View>
+
                 {/* Toggle de Auto-Upload */}
                 <TouchableOpacity
                   style={styles.dropboxToggleRow}
@@ -484,7 +515,7 @@ export default function ProfileScreen() {
                     variant="tertiary"
                     onPress={handleDisconnectDropbox}
                     style={{ flex: 1 }}
-                    icon={<Ionicons name="log-out-outline" size={16} color={colors.textSecondary} />}
+                    icon={<Ionicons name="log-out-outline" size={16} color={colors.error} />}
                   />
                 </View>
               </View>
@@ -724,7 +755,7 @@ export default function ProfileScreen() {
               <Text style={styles.dialogTitle}>Conectar ao Dropbox</Text>
             </View>
             <Text style={styles.dialogSubtitle}>
-              Ao conectar sua conta, seus scans poderão ser sincronizados automaticamente para a pasta /ScanPro no seu Dropbox.
+              Ao conectar sua conta, seus scans poderão ser sincronizados automaticamente para sua pasta no Dropbox.
             </Text>
 
             <TouchableOpacity
@@ -736,11 +767,19 @@ export default function ProfileScreen() {
               <Text style={styles.oauthButtonText}>Autorizar pelo Navegador (OAuth 2.0)</Text>
             </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: spacing.small }}>
-              <Ionicons name="key-outline" size={12} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                App Key: <Text style={{ fontWeight: '700', color: colors.primary }}>{DropboxService.getClientId()}</Text>
-              </Text>
+            <View style={styles.appKeyBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Ionicons name="key-outline" size={13} color={colors.primary} />
+                <Text style={styles.appKeyLabel}>Dropbox App Key Oficial:</Text>
+              </View>
+              <TextInput
+                style={styles.appKeyInput}
+                value={customAppKeyInput}
+                onChangeText={setCustomAppKeyInput}
+                placeholder="1rted05j9p2sb5b"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
 
             <View style={styles.dialogDividerRow}>
@@ -777,6 +816,64 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Escolha da Pasta Padrão no Dropbox */}
+      <Modal
+        visible={isFolderModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsFolderModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialog}>
+            <View style={styles.dialogHeader}>
+              <Ionicons name="folder-open" size={26} color={colors.primary} />
+              <Text style={styles.dialogTitle}>Pasta Padrão do Dropbox</Text>
+            </View>
+            <Text style={styles.dialogSubtitle}>
+              Digite a pasta dentro da sua conta do Dropbox onde novos scans serão salvos (ex: /ScanPro ou /Documentos/Empresa).
+            </Text>
+            <TextInput
+              style={styles.dialogInput}
+              value={customFolderInput}
+              onChangeText={setCustomFolderInput}
+              placeholder="/ScanPro"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.dialogActions}>
+              <AppButton
+                title="Cancelar"
+                variant="tertiary"
+                onPress={() => setIsFolderModalVisible(false)}
+                style={{ flex: 1 }}
+              />
+              <AppButton
+                title="Salvar Pasta"
+                variant="primary"
+                onPress={handleSaveTargetFolder}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Confirmação para Desconectar Dropbox (compatível com Web e Mobile) */}
+      <ConfirmModal
+        visible={isDisconnectConfirmVisible}
+        title="Desconectar Dropbox"
+        message="Deseja desconectar sua conta do Dropbox? O aplicativo continuará funcionando normalmente em modo local offline."
+        confirmText="Desconectar"
+        cancelText="Cancelar"
+        isDestructive={true}
+        icon="log-out-outline"
+        onConfirm={async () => {
+          setIsDisconnectConfirmVisible(false);
+          await DropboxService.disconnect();
+        }}
+        onCancel={() => setIsDisconnectConfirmVisible(false)}
+      />
 
       <BottomTabBar />
 
@@ -1305,5 +1402,71 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.textSecondary,
+  },
+  dropboxFolderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.small,
+    backgroundColor: colors.background,
+    borderRadius: radii.standard,
+    paddingHorizontal: spacing.compact,
+    marginBottom: spacing.small,
+  },
+  dropboxFolderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.compact,
+    flex: 1,
+    marginRight: spacing.small,
+  },
+  dropboxFolderLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  dropboxFolderPath: {
+    ...typography.body,
+    fontWeight: '700',
+    color: colors.primary,
+    marginTop: 1,
+  },
+  changeFolderButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.capsule,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  changeFolderButtonText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  appKeyBox: {
+    backgroundColor: colors.background,
+    padding: spacing.compact,
+    borderRadius: radii.standard,
+    marginBottom: spacing.small,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  appKeyLabel: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  appKeyInput: {
+    height: 38,
+    backgroundColor: colors.surface,
+    borderRadius: radii.standard,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.compact,
+    ...typography.body,
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });
