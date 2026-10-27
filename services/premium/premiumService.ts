@@ -5,6 +5,7 @@
  */
 
 import { PaywallPackage, PremiumEntitlement, PlanPeriod, CouponRedeemResult } from './types';
+import { RevenueCatService } from './revenueCatService';
 
 const STORAGE_KEY = 'scanpro_premium_entitlement';
 
@@ -30,9 +31,34 @@ export class PremiumService {
   ];
 
   /**
+   * Inicializa integrações de billing nativo (RevenueCat)
+   */
+  static async initialize(userId?: string): Promise<void> {
+    await RevenueCatService.initialize(userId);
+  }
+
+  /**
    * Obtém os pacotes de assinatura disponíveis para exibição no Paywall
    */
   static getPackages(): PaywallPackage[] {
+    return this.packages;
+  }
+
+  /**
+   * Carrega os pacotes atualizados do RevenueCat ou locais
+   */
+  static async loadPackages(): Promise<PaywallPackage[]> {
+    if (RevenueCatService.isAvailable()) {
+      try {
+        const live = await RevenueCatService.fetchPackages();
+        if (live && live.length > 0) {
+          this.packages = live;
+          return live;
+        }
+      } catch {
+        // Fallback para pacotes padrão locais
+      }
+    }
     return this.packages;
   }
 
@@ -71,9 +97,19 @@ export class PremiumService {
   }
 
   /**
-   * Realiza a compra/ativação de um pacote Pro
+   * Realiza a compra/ativação de um pacote Pro (Google Play ou Web)
    */
   static async purchasePackage(packageId: string): Promise<PremiumEntitlement> {
+    // 1. Tenta comprar via Google Play Billing / RevenueCat no Android
+    if (RevenueCatService.isAvailable()) {
+      const rcEntitlement = await RevenueCatService.purchasePackage(packageId);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rcEntitlement));
+      }
+      return rcEntitlement;
+    }
+
+    // 2. Fallback Web / Local
     const pkg = this.packages.find((p) => p.id === packageId) || this.packages[0];
     const now = new Date();
     const expiration = new Date();
@@ -187,6 +223,17 @@ export class PremiumService {
    * Restaura compras existentes
    */
   static async restorePurchases(): Promise<PremiumEntitlement> {
+    if (RevenueCatService.isAvailable()) {
+      try {
+        const restored = await RevenueCatService.restorePurchases();
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+        }
+        return restored;
+      } catch (err) {
+        console.warn('ScanPro: Erro ao restaurar compras no RevenueCat:', err);
+      }
+    }
     return this.getEntitlement();
   }
 

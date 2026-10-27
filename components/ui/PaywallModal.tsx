@@ -12,6 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, radii, touchTarget, shadows } from '../../theme';
 import { usePremiumStore } from '../../store';
@@ -24,6 +25,7 @@ interface PaywallModalProps {
 }
 
 export function PaywallModal({ visible, onClose }: PaywallModalProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { packages, isPro, purchasePackage, restorePurchases, redeemCoupon, isLoading } = usePremiumStore();
   const [selectedPlanId, setSelectedPlanId] = useState<string>('scanpro_pro_yearly');
@@ -47,8 +49,37 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
     }
   }, [visible, selectedPlanId]);
 
-  // Ao clicar no CTA inicial, abre o checkout de cobrança transparente (nunca ativa direto)
-  const handleOpenCheckout = () => {
+  // No CTA inicial: no Android dispara o Google Play Billing oficial diretamente; no Web abre checkout
+  const handleOpenCheckout = async () => {
+    if (Platform.OS === 'android') {
+      setIsProcessingCheckout(true);
+      try {
+        const success = await purchasePackage(selectedPlanId);
+        if (success) {
+          TelemetryService.track('subscription_purchased', {
+            planId: selectedPlanId,
+            platform: 'google_play',
+          });
+          Alert.alert(
+            'Bem-vindo ao ScanPro Pro! 🎉',
+            `Sua assinatura (${selectedPkg.name}) foi confirmada e ativada com sucesso!`
+          );
+          onClose();
+        }
+      } catch (err: any) {
+        if (err?.userCancelled) {
+          return;
+        }
+        Alert.alert(
+          'Google Play Billing',
+          err instanceof Error ? err.message : 'Não foi possível processar a assinatura no momento.'
+        );
+      } finally {
+        setIsProcessingCheckout(false);
+      }
+      return;
+    }
+
     setIsCheckoutVisible(true);
   };
 
@@ -303,11 +334,34 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
               </Text>
             </View>
 
-            {/* Rodapé e Legal */}
+            {/* Rodapé e Legal com conformidade Google Play Store */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Pagamentos seguros processados com segurança. Seus dados e documentos permanecem sempre salvos localmente e protegidos.
+                {Platform.OS === 'android'
+                  ? 'A assinatura será cobrada na sua conta Google Play após a confirmação. A renovação é automática a menos que seja cancelada até 24h antes do fim do período de teste ou atual nas configurações do Google Play.'
+                  : 'Pagamentos protegidos e seguros. Seus dados e documentos permanecem sempre salvos localmente no seu dispositivo.'}
               </Text>
+              <View style={styles.legalLinksRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    onClose();
+                    router.push('/privacy');
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.legalLinkText}>Política de Privacidade</Text>
+                </TouchableOpacity>
+                <Text style={styles.legalSeparator}>•</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    onClose();
+                    router.push('/privacy');
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.legalLinkText}>Termos de Uso</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </View>
@@ -1138,5 +1192,22 @@ const styles = StyleSheet.create({
   couponActionsRow: {
     flexDirection: 'row',
     gap: spacing.small,
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.compact,
+    gap: spacing.compact,
+  },
+  legalLinkText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalSeparator: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
 });

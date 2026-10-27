@@ -415,6 +415,14 @@ export default function ProfileScreen() {
                 </View>
               ) : (
                 <View style={{ flex: 1, gap: spacing.compact }}>
+                  {Platform.OS === 'android' && (
+                    <AppButton
+                      title="Gerenciar no Google Play"
+                      variant="secondary"
+                      onPress={() => Linking.openURL('https://play.google.com/store/account/subscriptions')}
+                      icon={<Ionicons name="logo-google-playstore" size={16} color={colors.primary} />}
+                    />
+                  )}
                   <View style={{ flexDirection: 'row', gap: spacing.small }}>
                     <AppButton
                       title="Cancelar Assinatura"

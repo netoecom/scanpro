@@ -4,10 +4,12 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { DropboxService } from '../services/dropbox';
+import { usePremiumStore } from '../store';
 
 export default function RootLayout() {
   useEffect(() => {
     DropboxService.init();
+    usePremiumStore.getState().initialize();
   }, []);
 
   return (

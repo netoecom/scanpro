@@ -13,6 +13,7 @@ interface PremiumState {
   isPaywallVisible: boolean;
   isLoading: boolean;
 
+  initialize: (userId?: string) => Promise<void>;
   loadEntitlement: () => void;
   openPaywall: () => void;
   closePaywall: () => void;
@@ -28,6 +29,21 @@ export const usePremiumStore = create<PremiumState>((set, get) => ({
   packages: PremiumService.getPackages(),
   isPaywallVisible: false,
   isLoading: false,
+
+  initialize: async (userId?: string) => {
+    try {
+      await PremiumService.initialize(userId);
+      const livePackages = await PremiumService.loadPackages();
+      const ent = PremiumService.getEntitlement();
+      set({
+        packages: livePackages,
+        entitlement: ent,
+        isPro: ent.isActive && ent.tier === 'pro',
+      });
+    } catch (err) {
+      console.warn('ScanPro: Erro ao inicializar store de assinatura:', err);
+    }
+  },
 
   loadEntitlement: () => {
     const ent = PremiumService.getEntitlement();
