@@ -3,8 +3,9 @@
  * Gerencia o estado reativo da assinatura Pro e o controle de exibição do Paywall.
  */
 
+import { Platform } from 'react-native';
 import { create } from 'zustand';
-import { PremiumService, PremiumEntitlement, PaywallPackage } from '../services/premium';
+import { PremiumService, PremiumEntitlement, PaywallPackage, RevenueCatService } from '../services/premium';
 
 interface PremiumState {
   entitlement: PremiumEntitlement;
@@ -15,7 +16,7 @@ interface PremiumState {
 
   initialize: (userId?: string) => Promise<void>;
   loadEntitlement: () => void;
-  openPaywall: () => void;
+  openPaywall: () => Promise<void>;
   closePaywall: () => void;
   purchasePackage: (packageId: string) => Promise<boolean>;
   redeemCoupon: (code: string) => Promise<{ success: boolean; message: string }>;
@@ -53,7 +54,25 @@ export const usePremiumStore = create<PremiumState>((set, get) => ({
     });
   },
 
-  openPaywall: () => {
+  openPaywall: async () => {
+    // No Android nativo, tenta abrir o Paywall nativo do RevenueCat (RevenueCatUI.presentPaywall)
+    if (Platform.OS === 'android' && RevenueCatService.isAvailable()) {
+      try {
+        const purchased = await RevenueCatService.presentPaywall();
+        if (purchased) {
+          const ent = PremiumService.getEntitlement();
+          set({
+            entitlement: ent,
+            isPro: ent.isActive && ent.tier === 'pro',
+            isPaywallVisible: false,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('ScanPro: Fallback para Paywall customizado:', err);
+      }
+    }
+    // Fallback Web ou sem Paywall nativo: abre o PaywallModal do ScanPro
     set({ isPaywallVisible: true });
   },
 

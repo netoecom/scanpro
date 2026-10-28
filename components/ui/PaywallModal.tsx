@@ -587,27 +587,6 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                 editable={!isRedeemingCoupon}
               />
 
-              {/* Sugestões de Códigos Rápidos para Testes e Demonstração */}
-              <Text style={styles.couponQuickTitle}>Códigos de Demonstração:</Text>
-              <View style={styles.couponQuickRow}>
-                {[
-                  { label: 'PRO2026 (1 Ano)', code: 'PRO2026' },
-                  { label: 'SCANPRO-VIP (1 Ano)', code: 'SCANPRO-VIP' },
-                  { label: 'PRO-VITALICIO (Ilimitado)', code: 'PRO-VITALICIO' },
-                  { label: 'PRO-MENSAL (1 Mês)', code: 'PRO-MENSAL' },
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.code}
-                    style={styles.couponQuickChip}
-                    onPress={() => setCouponCodeInput(item.code)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="sparkles" size={11} color="#FF9500" />
-                    <Text style={styles.couponQuickChipText}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <View style={styles.couponActionsRow}>
                 <AppButton
                   title="Cancelar"

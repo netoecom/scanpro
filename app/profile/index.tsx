@@ -1152,27 +1152,6 @@ export default function ProfileScreen() {
                 editable={!isRedeemingCoupon}
               />
 
-              {/* Sugestões de Códigos Rápidos para Teste */}
-              <Text style={styles.couponQuickLabel}>Códigos de Teste / Demonstração:</Text>
-              <View style={styles.couponChipsRow}>
-                {[
-                  { label: 'PRO2026 (1 Ano)', code: 'PRO2026' },
-                  { label: 'SCANPRO-VIP (1 Ano)', code: 'SCANPRO-VIP' },
-                  { label: 'PRO-VITALICIO (Ilimitado)', code: 'PRO-VITALICIO' },
-                  { label: 'PRO-MENSAL (1 Mês)', code: 'PRO-MENSAL' },
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.code}
-                    style={styles.couponChip}
-                    onPress={() => setCouponCodeInput(item.code)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="sparkles" size={11} color="#FF9500" />
-                    <Text style={styles.couponChipText}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <View style={styles.dialogActions}>
                 <AppButton
                   title="Cancelar"

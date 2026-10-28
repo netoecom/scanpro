@@ -193,4 +193,33 @@ export class RevenueCatService {
       Purchases.removeCustomerInfoUpdateListener(sub);
     };
   }
+
+  /**
+   * Exibe o Paywall nativo do RevenueCat (RevenueCatUI.presentPaywall)
+   * Permite testar o paywall nativo diretamente no Android e validar a compra com testadores de licença.
+   */
+  static async presentPaywall(): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      return false;
+    }
+
+    try {
+      // Import dinâmico protegido para compatibilidade com web e testes
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const RevenueCatUI = require('react-native-purchases-ui').default;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { PAYWALL_RESULT } = require('react-native-purchases-ui');
+
+      const result = await RevenueCatUI.presentPaywall();
+
+      if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('ScanPro: Erro ao exibir RevenueCatUI.presentPaywall:', err);
+      return false;
+    }
+  }
 }
+
