@@ -720,6 +720,17 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
             <View style={styles.rowDivider} />
+            <TouchableOpacity
+              style={styles.aboutRow}
+              onPress={() => router.push('/terms' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.aboutLabel, { color: colors.primary, fontWeight: '600' }]}>
+                Termos de Uso & Assinatura
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.rowDivider} />
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Suporte</Text>
               <Text style={[styles.aboutValue, { flexShrink: 1, color: colors.primary, fontWeight: '600' }]}>

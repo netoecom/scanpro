@@ -355,7 +355,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                 <TouchableOpacity
                   onPress={() => {
                     onClose();
-                    router.push('/privacy');
+                    router.push('/terms' as any);
                   }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
