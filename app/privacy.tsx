@@ -99,7 +99,7 @@ export default function PrivacyScreen() {
           <Text style={styles.paragraph}>
             Se você tiver dúvidas, solicitações ou sugestões a respeito desta Política de Privacidade, entre em contato com nossa equipe de engenharia através do e-mail:
           </Text>
-          <Text style={styles.contactEmail}>suporte@ecomti.com.br</Text>
+          <Text style={styles.contactEmail}>contato@ecomti.com.br</Text>
         </View>
 
         <View style={styles.footer}>

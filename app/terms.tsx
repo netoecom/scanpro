@@ -122,7 +122,7 @@ export default function TermsScreen() {
           <Text style={styles.paragraph}>
             Em caso de dúvidas, solicitações ou suporte relativo ao ScanPro e suas assinaturas, entre em contato através do e-mail oficial:
           </Text>
-          <Text style={styles.contactEmail}>contato.netoecom@gmail.com</Text>
+          <Text style={styles.contactEmail}>contato@ecomti.com.br</Text>
         </View>
 
         <View style={styles.footerSpacing} />
